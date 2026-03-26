@@ -1,0 +1,224 @@
+{
+  "entities": {
+    "warehouse": {
+      "title": "Warehouse",
+      "description": "A physical storage location",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string" },
+        "location": { "type": "string" },
+        "country": { "type": "string" },
+        "manager_id": { "type": "string" },
+        "status": { "type": "string", "enum": ["active", "inactive"] }
+      },
+      "required": ["name"]
+    },
+    "supplier": {
+      "title": "Supplier",
+      "description": "A provider of goods",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string" },
+        "contact_info": { "type": "string" },
+        "country": { "type": "string" },
+        "status": { "type": "string", "enum": ["active", "inactive"] }
+      },
+      "required": ["name"]
+    },
+    "brand": {
+      "title": "Brand",
+      "description": "A product brand",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string" },
+        "country_of_origin": { "type": "string" },
+        "status": { "type": "string", "enum": ["active", "inactive"] }
+      },
+      "required": ["name"]
+    },
+    "category": {
+      "title": "Category",
+      "description": "A product category",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string" },
+        "parent_category_id": { "type": "string" }
+      },
+      "required": ["name"]
+    },
+    "product": {
+      "title": "Product",
+      "description": "A general product definition",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string" },
+        "sku": { "type": "string" },
+        "brand_id": { "type": "string" },
+        "category_id": { "type": "string" },
+        "supplier_id": { "type": "string" },
+        "description": { "type": "string" },
+        "image_url": { "type": "string" },
+        "status": { "type": "string", "enum": ["active", "inactive"] }
+      },
+      "required": ["name", "sku"]
+    },
+    "product_variant": {
+      "title": "Product Variant",
+      "description": "A specific variant of a product (color, size, etc.)",
+      "type": "object",
+      "properties": {
+        "product_id": { "type": "string" },
+        "variant_code": { "type": "string" },
+        "barcode": { "type": "string" },
+        "color": { "type": "string" },
+        "size": { "type": "string" },
+        "image_url": { "type": "string" },
+        "reorder_threshold": { "type": "number" },
+        "unit_cost": { "type": "number" },
+        "status": { "type": "string", "enum": ["active", "inactive"] }
+      },
+      "required": ["product_id", "variant_code", "barcode"]
+    },
+    "purchase_order": {
+      "title": "Purchase Order",
+      "description": "An order to a supplier for goods",
+      "type": "object",
+      "properties": {
+        "supplier_id": { "type": "string" },
+        "warehouse_id": { "type": "string" },
+        "items": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "variant_id": { "type": "string" },
+              "quantity": { "type": "number" },
+              "unit_cost": { "type": "number" }
+            }
+          }
+        },
+        "total_amount": { "type": "number" },
+        "status": { "type": "string", "enum": ["draft", "sent", "in_transit", "received", "overdue"] },
+        "expected_delivery_date": { "type": "string", "format": "date" },
+        "created_at": { "type": "string", "format": "date-time" }
+      },
+      "required": ["supplier_id", "warehouse_id", "status"]
+    },
+    "backorder": {
+      "title": "Backorder",
+      "description": "Customer demand that cannot be fulfilled due to stockout",
+      "type": "object",
+      "properties": {
+        "variant_id": { "type": "string" },
+        "warehouse_id": { "type": "string" },
+        "quantity": { "type": "number" },
+        "order_reference": { "type": "string" },
+        "status": { "type": "string", "enum": ["pending", "fulfilled", "cancelled"] },
+        "created_at": { "type": "string", "format": "date-time" }
+      },
+      "required": ["variant_id", "warehouse_id", "quantity", "order_reference"]
+    },
+    "revenue_invoice": {
+      "title": "Revenue Invoice",
+      "description": "A record of a sale and revenue generated",
+      "type": "object",
+      "properties": {
+        "invoice_number": { "type": "string" },
+        "customer_name": { "type": "string" },
+        "items": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "variant_id": { "type": "string" },
+              "quantity": { "type": "number" },
+              "unit_price": { "type": "number" },
+              "total": { "type": "number" }
+            }
+          }
+        },
+        "total_amount": { "type": "number" },
+        "status": { "type": "string", "enum": ["paid", "pending", "cancelled"] },
+        "warehouse_id": { "type": "string" },
+        "created_at": { "type": "string", "format": "date-time" }
+      },
+      "required": ["invoice_number", "customer_name", "total_amount", "status", "created_at"]
+    },
+    "inventory_balance": {
+      "title": "Inventory Balance",
+      "description": "Current stock levels for a variant in a warehouse",
+      "type": "object",
+      "properties": {
+        "variant_id": { "type": "string" },
+        "warehouse_id": { "type": "string" },
+        "available_quantity": { "type": "number" },
+        "reserved_quantity": { "type": "number" },
+        "blocked_quantity": { "type": "number" },
+        "version": { "type": "number" },
+        "last_modified": { "type": "string", "format": "date-time" }
+      },
+      "required": ["variant_id", "warehouse_id", "available_quantity"]
+    },
+    "reservation": {
+      "title": "Reservation",
+      "description": "Temporary stock hold",
+      "type": "object",
+      "properties": {
+        "variant_id": { "type": "string" },
+        "warehouse_id": { "type": "string" },
+        "quantity": { "type": "number" },
+        "order_reference": { "type": "string" },
+        "expiry_timestamp": { "type": "string", "format": "date-time" },
+        "status": { "type": "string", "enum": ["active", "expired", "committed"] },
+        "created_at": { "type": "string", "format": "date-time" }
+      },
+      "required": ["variant_id", "warehouse_id", "quantity", "expiry_timestamp"]
+    },
+    "stock_movement": {
+      "title": "Stock Movement",
+      "description": "Audit log of stock changes",
+      "type": "object",
+      "properties": {
+        "variant_id": { "type": "string" },
+        "warehouse_id": { "type": "string" },
+        "movement_type": { "type": "string", "enum": ["receipt", "issue", "transfer_in", "transfer_out", "adjustment", "return"] },
+        "quantity": { "type": "number" },
+        "idempotency_key": { "type": "string" },
+        "source_reference": { "type": "string" },
+        "user_id": { "type": "string" },
+        "timestamp": { "type": "string", "format": "date-time" },
+        "notes": { "type": "string" },
+        "status": { "type": "string", "enum": ["completed", "pending_qc", "pending_inspection", "in_transit"] }
+      },
+      "required": ["variant_id", "warehouse_id", "movement_type", "quantity", "timestamp"]
+    },
+    "user": {
+      "title": "User",
+      "description": "A system user",
+      "type": "object",
+      "properties": {
+        "email": { "type": "string" },
+        "displayName": { "type": "string" },
+        "role": { "type": "string", "enum": ["admin", "manager", "worker"] },
+        "warehouse_ids": { "type": "array", "items": { "type": "string" } },
+        "created_at": { "type": "string", "format": "date-time" }
+      },
+      "required": ["email", "role"]
+    }
+  },
+  "firestore": {
+    "/warehouses/{warehouseId}": { "schema": "warehouse", "description": "Warehouses" },
+    "/suppliers/{supplierId}": { "schema": "supplier", "description": "Suppliers" },
+    "/brands/{brandId}": { "schema": "brand", "description": "Brands" },
+    "/categories/{categoryId}": { "schema": "category", "description": "Categories" },
+    "/products/{productId}": { "schema": "product", "description": "Products" },
+    "/product_variants/{variantId}": { "schema": "product_variant", "description": "Product Variants" },
+    "/inventory_balances/{balanceId}": { "schema": "inventory_balance", "description": "Stock Balances" },
+    "/reservations/{reservationId}": { "schema": "reservation", "description": "Stock Reservations" },
+    "/stock_movements/{movementId}": { "schema": "stock_movement", "description": "Stock Movements" },
+    "/purchase_orders/{poId}": { "schema": "purchase_order", "description": "Purchase Orders" },
+    "/backorders/{backorderId}": { "schema": "backorder", "description": "Backorders" },
+    "/revenue_invoices/{invoiceId}": { "schema": "revenue_invoice", "description": "Revenue Invoices" },
+    "/users/{userId}": { "schema": "user", "description": "Users" }
+  }
+}

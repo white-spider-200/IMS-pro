@@ -1,0 +1,98 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Helper functions
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+    
+    function isAnonymous() {
+      return isAuthenticated() && request.auth.token.firebase.sign_in_provider == 'anonymous';
+    }
+
+    function isDefaultAdmin() {
+      return isAuthenticated() && request.auth.token.email == "mohammedhandi52@gmail.com";
+    }
+
+    function isAdmin() {
+      return isDefaultAdmin() || 
+             (exists(/databases/$(database)/documents/users/$(request.auth.uid)) && 
+              get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin');
+    }
+
+    function isValidProduct(data) {
+      let requiredFields = ['name', 'sku'];
+      let optionalFields = ['brand_id', 'category_id', 'description', 'image_url', 'status', 'created_at', 'country_of_origin'];
+      
+      return data.keys().hasAll(requiredFields) &&
+             data.name is string && data.name.size() > 0 && data.name.size() < 200 &&
+             data.sku is string && data.sku.size() > 0 && data.sku.size() < 100 &&
+             (!('description' in data) || (data.description is string && data.description.size() < 5000)) &&
+             (!('image_url' in data) || (data.image_url is string && data.image_url.size() < 1000000)) &&
+             (!('status' in data) || (data.status is string)) &&
+             (!('created_at' in data) || (data.created_at is string));
+    }
+
+    // Master data: Read by all authenticated, write by admin
+    match /warehouses/{id} {
+      allow read: if isAuthenticated();
+      allow write: if isAdmin();
+    }
+    match /suppliers/{id} {
+      allow read: if isAuthenticated();
+      allow write: if isAdmin();
+    }
+    match /brands/{id} {
+      allow read: if isAuthenticated();
+      allow write: if isAdmin();
+    }
+    match /categories/{id} {
+      allow read: if isAuthenticated();
+      allow write: if isAdmin();
+    }
+    match /products/{id} {
+      allow read: if isAuthenticated();
+      allow create, update: if isAdmin() && isValidProduct(request.resource.data);
+      allow delete: if isAdmin();
+    }
+    match /product_variants/{id} {
+      allow read: if isAuthenticated();
+      allow create, update: if isAdmin();
+      allow delete: if isAdmin();
+    }
+
+    // Inventory data: Read/Write by authenticated users
+    match /inventory_balances/{id} {
+      allow read: if isAuthenticated();
+      allow write: if isAuthenticated();
+    }
+    match /reservations/{id} {
+      allow read: if isAuthenticated();
+      allow write: if isAuthenticated();
+    }
+    match /stock_movements/{id} {
+      allow read: if isAuthenticated();
+      allow write: if isAuthenticated();
+    }
+
+    match /purchase_orders/{id} {
+      allow read: if isAuthenticated();
+      allow write: if isAuthenticated();
+    }
+
+    match /backorders/{id} {
+      allow read: if isAuthenticated();
+      allow write: if isAuthenticated();
+    }
+
+    match /revenue_invoices/{id} {
+      allow read: if isAuthenticated();
+      allow write: if isAuthenticated();
+    }
+    
+    match /users/{userId} {
+      allow read: if isAuthenticated();
+      allow write: if request.auth.uid == userId || isAdmin();
+    }
+  }
+}
