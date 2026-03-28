@@ -11,17 +11,20 @@ export interface Warehouse {
 
 export interface Supplier {
   id?: string;
+  supplier_code?: string;
   name: string;
+  email?: string;
+  phone?: string;
   contact_info?: string;
   country?: string;
-  status: Status;
+  status?: Status;
 }
 
 export interface Brand {
   id?: string;
   name: string;
   country_of_origin?: string;
-  status: Status;
+  status?: Status;
 }
 
 export interface Category {
@@ -40,7 +43,7 @@ export interface Product {
   country_of_origin?: string;
   description?: string;
   image_url?: string;
-  status: Status;
+  status?: Status;
 }
 
 export interface ProductVariant {
@@ -55,7 +58,7 @@ export interface ProductVariant {
   attributes?: Record<string, any>;
   reorder_threshold?: number;
   unit_cost?: number;
-  status: Status;
+  status?: Status;
 }
 
 export interface InventoryBalance {
@@ -135,5 +138,40 @@ export interface User {
   displayName?: string;
   role: 'admin' | 'manager' | 'worker';
   warehouse_ids?: string[];
+  created_at: string;
+}
+
+export interface InvoiceItem {
+  variant_id: string;
+  quantity: number;
+  unit_price: number;
+  total: number;
+}
+
+export interface RevenueInvoice {
+  id?: string;
+  invoice_number: string;
+  customer_name: string;
+  items: InvoiceItem[];
+  total_amount: number;
+  status: 'paid' | 'pending' | 'cancelled';
+  warehouse_id: string;
+  movement_id?: string;
+  created_at: string;
+}
+
+export interface ReceiptInvoice {
+  id?: string;
+  invoice_type: 'receipt';
+  invoice_number: string;
+  movement_id: string;
+  variant_id: string;
+  warehouse_id: string;
+  supplier_id?: string | null;
+  supplier_name: string;
+  batch_id: string;
+  status: 'completed' | 'pending';
+  total_amount: number;
+  items: InvoiceItem[];
   created_at: string;
 }

@@ -1,20 +1,22 @@
 import React, { useState, useEffect } from 'react';
 import { db } from '../firebase';
 import { collection, onSnapshot, query, where, orderBy, limit, addDoc, Timestamp } from 'firebase/firestore';
-import { 
-  ShoppingCart, 
-  Truck, 
-  AlertCircle, 
-  CheckCircle2, 
-  Clock, 
-  TrendingUp, 
-  Users, 
-  Package, 
+import {
+  ShoppingCart,
+  Truck,
+  AlertCircle,
+  CheckCircle2,
+  Clock,
+  TrendingUp,
+  Users,
+  Package,
   Plus,
   ChevronRight,
   Download,
   Filter,
   Calendar
+  ,
+  X
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { toast } from 'sonner';
@@ -32,6 +34,14 @@ export default function ProcurementDashboard() {
   const [backorders, setBackorders] = useState<Backorder[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedWarehouseId, setSelectedWarehouseId] = useState<string>('all');
+  const [selectedSupplier, setSelectedSupplier] = useState<Supplier | null>(null);
+
+  const handleSupplierClick = (supplierId?: string) => {
+    if (!supplierId) return;
+    const supplier = suppliers.find((item) => item.id === supplierId);
+    if (!supplier) return;
+    setSelectedSupplier(supplier);
+  };
 
   const handleBigSeed = async () => {
     const loadingToast = toast.loading('Seeding large data batch...');
@@ -179,7 +189,7 @@ export default function ProcurementDashboard() {
         <div className="flex items-center gap-3">
           <div className="flex items-center gap-2 bg-white border border-gray-200 rounded-xl px-3 py-2 shadow-sm">
             <Filter className="w-4 h-4 text-gray-400" />
-            <select 
+            <select
               value={selectedWarehouseId}
               onChange={(e) => setSelectedWarehouseId(e.target.value)}
               className="text-sm font-bold bg-transparent outline-none"
@@ -188,7 +198,7 @@ export default function ProcurementDashboard() {
               {warehouses.map(w => <option key={w.id} value={w.id}>{w.name}</option>)}
             </select>
           </div>
-          <button 
+          <button
             onClick={handleBigSeed}
             className="bg-indigo-50 text-indigo-700 px-4 py-2 rounded-xl font-semibold hover:bg-indigo-100 transition-all text-sm flex items-center gap-2"
           >
@@ -235,7 +245,13 @@ export default function ProcurementDashboard() {
                         <p className="text-[10px] text-gray-400">SKU: {rec.variant.barcode}</p>
                       </td>
                       <td className="px-6 py-4">
-                        <p className="text-sm text-gray-600">{rec.supplier.name}</p>
+                        <button
+                          type="button"
+                          onClick={() => handleSupplierClick(rec.supplier.id)}
+                          className="text-sm text-gray-600 hover:text-indigo-600 hover:underline"
+                        >
+                          {rec.supplier.name}
+                        </button>
                       </td>
                       <td className="px-6 py-4">
                         <div className="flex items-center gap-2">
@@ -253,7 +269,7 @@ export default function ProcurementDashboard() {
                         <span className="text-sm font-black text-indigo-600">{rec.suggestedQty}</span>
                       </td>
                       <td className="px-6 py-4 text-right">
-                        <button 
+                        <button
                           onClick={() => handleCreatePO(rec)}
                           className="bg-black text-white text-[10px] font-bold px-3 py-1.5 rounded-lg hover:bg-gray-800 transition-all opacity-0 group-hover:opacity-100"
                         >
@@ -281,10 +297,15 @@ export default function ProcurementDashboard() {
                 <div key={po.id} className="p-4 rounded-2xl border border-gray-100 bg-gray-50 space-y-3">
                   <div className="flex items-center justify-between">
                     <span className="text-xs font-bold text-gray-400">PO #{po.id?.slice(-4).toUpperCase()}</span>
-                    <StatusBadge status={po.status} />
                   </div>
                   <div>
-                    <p className="font-bold text-sm">{suppliers.find(s => s.id === po.supplier_id)?.name}</p>
+                    <button
+                      type="button"
+                      onClick={() => handleSupplierClick(po.supplier_id)}
+                      className="font-bold text-sm hover:text-indigo-600 hover:underline"
+                    >
+                      {suppliers.find(s => s.id === po.supplier_id)?.name}
+                    </button>
                     <p className="text-xs text-gray-500">${po.total_amount.toLocaleString()}</p>
                   </div>
                   <div className="flex items-center justify-between pt-2 border-t border-gray-200">
@@ -370,7 +391,13 @@ export default function ProcurementDashboard() {
                     <div className="w-8 h-8 rounded-full bg-gray-100 flex items-center justify-center text-xs font-bold text-gray-400">
                       {s.name.charAt(0)}
                     </div>
-                    <span className="text-sm font-bold text-gray-700">{s.name}</span>
+                    <button
+                      type="button"
+                      onClick={() => handleSupplierClick(s.id)}
+                      className="text-sm font-bold text-gray-700 hover:text-indigo-600 hover:underline"
+                    >
+                      {s.name}
+                    </button>
                   </div>
                   <div className="text-right">
                     <p className="text-xs font-bold text-green-600">94% On-time</p>
@@ -382,22 +409,41 @@ export default function ProcurementDashboard() {
           </div>
         </div>
       </div>
+
+      <AnimatePresence>
+        {selectedSupplier && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={() => setSelectedSupplier(null)} className="absolute inset-0 bg-black/60 backdrop-blur-sm" />
+            <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.95 }} className="relative bg-white rounded-3xl shadow-2xl w-full max-w-lg p-8">
+              <div className="flex justify-between items-start mb-8">
+                <div>
+                  <p className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-2">Supplier</p>
+                  <h3 className="text-2xl font-bold">{selectedSupplier.name}</h3>
+                  <p className="text-sm text-gray-500">{selectedSupplier.supplier_code || 'No Supplier ID'}</p>
+                </div>
+                <button onClick={() => setSelectedSupplier(null)} className="text-gray-400 hover:text-gray-600">
+                  <X className="w-6 h-6" />
+                </button>
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div className="p-4 bg-gray-50 rounded-2xl">
+                  <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest block mb-1">Email</label>
+                  <p className="text-sm font-bold text-gray-800">{selectedSupplier.email || selectedSupplier.contact_info || 'N/A'}</p>
+                </div>
+                <div className="p-4 bg-gray-50 rounded-2xl">
+                  <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest block mb-1">Phone</label>
+                  <p className="text-sm font-bold text-gray-800">{selectedSupplier.phone || 'N/A'}</p>
+                </div>
+                <div className="p-4 bg-gray-50 rounded-2xl col-span-2">
+                  <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest block mb-1">Country</label>
+                  <p className="text-sm font-bold text-gray-800">{selectedSupplier.country || 'N/A'}</p>
+                </div>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }
 
-function StatusBadge({ status }: { status: string }) {
-  const styles: any = {
-    draft: "bg-gray-100 text-gray-600",
-    sent: "bg-blue-100 text-blue-600",
-    in_transit: "bg-purple-100 text-purple-600",
-    received: "bg-green-100 text-green-600",
-    overdue: "bg-red-100 text-red-600",
-  };
-
-  return (
-    <span className={cn("text-[8px] font-black uppercase tracking-widest px-2 py-0.5 rounded-full", styles[status])}>
-      {status.replace('_', ' ')}
-    </span>
-  );
-}

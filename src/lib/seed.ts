@@ -1,5 +1,33 @@
 import { db } from '../firebase';
-import { collection, addDoc, getDocs, query, limit, where, updateDoc } from 'firebase/firestore';
+import { collection, addDoc, deleteDoc, getDocs, query, limit, where, updateDoc } from 'firebase/firestore';
+
+const BUSINESS_COLLECTIONS = [
+  'warehouses',
+  'suppliers',
+  'brands',
+  'categories',
+  'products',
+  'product_variants',
+  'inventory_balances',
+  'stock_movements',
+  'purchase_orders',
+  'backorders',
+  'reservations',
+  'revenue_invoices',
+  'receipt_invoices',
+  'clients',
+];
+
+async function deleteCollectionDocuments(collectionName: string) {
+  const snapshot = await getDocs(collection(db, collectionName));
+  await Promise.all(snapshot.docs.map((document) => deleteDoc(document.ref)));
+}
+
+export async function clearAllData() {
+  for (const collectionName of BUSINESS_COLLECTIONS) {
+    await deleteCollectionDocuments(collectionName);
+  }
+}
 
 export async function seedInitialData() {
   const warehousesSnap = await getDocs(query(collection(db, 'warehouses'), limit(1)));
@@ -8,27 +36,27 @@ export async function seedInitialData() {
   console.log('Seeding initial data...');
 
   // 1. Warehouses
-  const w1 = await addDoc(collection(db, 'warehouses'), { 
-    name: 'Central Logistics Hub', 
-    location: 'London Heathrow', 
-    country: 'United Kingdom', 
-    status: 'active', 
+  const w1 = await addDoc(collection(db, 'warehouses'), {
+    name: 'Central Logistics Hub',
+    location: 'London Heathrow',
+    country: 'United Kingdom',
+    status: 'active',
     manager_name: 'John Manager',
     manager_email: 'manager1@example.com'
   });
-  const w2 = await addDoc(collection(db, 'warehouses'), { 
-    name: 'Northern Distribution Center', 
-    location: 'Manchester', 
-    country: 'United Kingdom', 
-    status: 'active', 
+  const w2 = await addDoc(collection(db, 'warehouses'), {
+    name: 'Northern Distribution Center',
+    location: 'Manchester',
+    country: 'United Kingdom',
+    status: 'active',
     manager_name: 'Sarah Supervisor',
     manager_email: 'manager2@example.com'
   });
-  const w3 = await addDoc(collection(db, 'warehouses'), { 
-    name: 'European Gateway', 
-    location: 'Rotterdam', 
-    country: 'Netherlands', 
-    status: 'active', 
+  const w3 = await addDoc(collection(db, 'warehouses'), {
+    name: 'European Gateway',
+    location: 'Rotterdam',
+    country: 'Netherlands',
+    status: 'active',
     manager_name: 'Hans Visser',
     manager_email: 'hans@example.com'
   });
@@ -60,44 +88,48 @@ export async function seedInitialData() {
   const c3 = await addDoc(collection(db, 'categories'), { name: 'Peripherals', parent_category_id: c1.id });
   const c4 = await addDoc(collection(db, 'categories'), { name: 'Networking', parent_category_id: c1.id });
 
+  // 4.5 Clients
+  const cl1 = await addDoc(collection(db, 'clients'), { client_code: 'CLI-001', name: 'Global Solutions Inc', email: 'purchasing@globalsolutions.com', phone: '555-0101', location: 'New York, USA', status: 'active' });
+  const cl2 = await addDoc(collection(db, 'clients'), { client_code: 'CLI-002', name: 'Creative Agency Ltd', email: 'orders@creativeagency.co.uk', phone: '555-0202', location: 'London, UK', status: 'active' });
+
   // 5. Products
-  const p1 = await addDoc(collection(db, 'products'), { 
-    name: 'TechPro X1 Carbon', 
-    sku: 'TP-X1-C', 
-    brand_id: b1.id, 
-    category_id: c2.id, 
+  const p1 = await addDoc(collection(db, 'products'), {
+    name: 'TechPro X1 Carbon',
+    sku: 'TP-X1-C',
+    brand_id: b1.id,
+    category_id: c2.id,
     supplier_id: s1.id,
     status: 'active',
     description: 'High-performance business ultrabook'
   });
 
-  const p2 = await addDoc(collection(db, 'products'), { 
-    name: 'EcoMouse Wireless Pro', 
-    sku: 'EM-W-PRO', 
-    brand_id: b2.id, 
-    category_id: c3.id, 
+  const p2 = await addDoc(collection(db, 'products'), {
+    name: 'EcoMouse Wireless Pro',
+    sku: 'EM-W-PRO',
+    brand_id: b2.id,
+    category_id: c3.id,
     supplier_id: s2.id,
     status: 'active',
     description: 'Ergonomic sustainable wireless mouse'
   });
 
-  const p3 = await addDoc(collection(db, 'products'), { 
-    name: 'Zenith Router AX6000', 
-    sku: 'ZN-AX6000', 
-    brand_id: b3.id, 
-    category_id: c4.id, 
+  const p3 = await addDoc(collection(db, 'products'), {
+    name: 'Zenith Router AX6000',
+    sku: 'ZN-AX6000',
+    brand_id: b3.id,
+    category_id: c4.id,
     supplier_id: s3.id,
     status: 'active',
     description: 'Next-gen WiFi 6 high-speed router'
   });
 
   // 6. Variants
-  const v1 = await addDoc(collection(db, 'product_variants'), { 
-    product_id: p1.id, 
-    variant_code: 'X1-SILVER-16GB-512GB', 
-    barcode: '1234567890123', 
-    color: 'Silver', 
-    size: '14 inch', 
+  const v1 = await addDoc(collection(db, 'product_variants'), {
+    product_id: p1.id,
+    variant_code: 'X1-SILVER-16GB-512GB',
+    barcode: '1234567890123',
+    color: 'Silver',
+    size: '14 inch',
     reorder_threshold: 20,
     unit_cost: 1200,
     unit_price: 1800,
@@ -105,12 +137,12 @@ export async function seedInitialData() {
     photo_url: 'https://images.unsplash.com/photo-1593642632823-8f785ba67e45?auto=format&fit=crop&q=80&w=400'
   });
 
-  const v2 = await addDoc(collection(db, 'product_variants'), { 
-    product_id: p1.id, 
-    variant_code: 'X1-BLACK-32GB-1TB', 
-    barcode: '1234567890124', 
-    color: 'Matte Black', 
-    size: '14 inch', 
+  const v2 = await addDoc(collection(db, 'product_variants'), {
+    product_id: p1.id,
+    variant_code: 'X1-BLACK-32GB-1TB',
+    barcode: '1234567890124',
+    color: 'Matte Black',
+    size: '14 inch',
     reorder_threshold: 15,
     unit_cost: 1600,
     unit_price: 2400,
@@ -118,11 +150,11 @@ export async function seedInitialData() {
     photo_url: 'https://images.unsplash.com/photo-1588872657578-7efd1f1555ed?auto=format&fit=crop&q=80&w=400'
   });
 
-  const v3 = await addDoc(collection(db, 'product_variants'), { 
-    product_id: p2.id, 
-    variant_code: 'EM-PRO-GRAY', 
-    barcode: '9876543210987', 
-    color: 'Space Gray', 
+  const v3 = await addDoc(collection(db, 'product_variants'), {
+    product_id: p2.id,
+    variant_code: 'EM-PRO-GRAY',
+    barcode: '9876543210987',
+    color: 'Space Gray',
     reorder_threshold: 50,
     unit_cost: 45,
     unit_price: 89,
@@ -130,15 +162,15 @@ export async function seedInitialData() {
     photo_url: 'https://images.unsplash.com/photo-1527864550417-7fd91fc51a46?auto=format&fit=crop&q=80&w=400'
   });
 
-  const v4 = await addDoc(collection(db, 'product_variants'), { 
-    product_id: p3.id, 
-    variant_code: 'AX6000-WHITE', 
-    barcode: '4567890123456', 
-    color: 'White', 
+  const v4 = await addDoc(collection(db, 'product_variants'), {
+    product_id: p3.id,
+    variant_code: 'AX6000-WHITE',
+    barcode: '4567890123456',
+    color: 'White',
     reorder_threshold: 10,
     unit_cost: 180,
     unit_price: 299,
-    status: 'active' 
+    status: 'active'
   });
 
   // 7. Initial Balances & Movements
@@ -275,6 +307,7 @@ export async function seedInitialData() {
   await addDoc(collection(db, 'revenue_invoices'), {
     invoice_number: 'INV-2026-0001',
     customer_name: 'Global Solutions Inc',
+    client_id: cl1.id,
     items: [{ variant_id: v1.id, quantity: 10, unit_price: 1800, total: 18000 }],
     total_amount: 18000,
     status: 'paid',
@@ -285,6 +318,7 @@ export async function seedInitialData() {
   await addDoc(collection(db, 'revenue_invoices'), {
     invoice_number: 'INV-2026-0002',
     customer_name: 'Creative Agency Ltd',
+    client_id: cl2.id,
     items: [{ variant_id: v3.id, quantity: 25, unit_price: 89, total: 2225 }],
     total_amount: 2225,
     status: 'pending',
@@ -296,218 +330,296 @@ export async function seedInitialData() {
 }
 
 export async function seedBigData() {
-  console.log('Seeding big data batch...');
+  console.log('Seeding curated big data batch...');
 
-  // 1. More Warehouses
-  const warehouseNames = ['East Coast Logistics', 'Pacific Gateway', 'Midwest Hub', 'Southern Port', 'Nordic Distribution'];
-  const warehouseIds: string[] = [];
-  for (const name of warehouseNames) {
-    const doc = await addDoc(collection(db, 'warehouses'), {
-      name,
-      location: 'Various',
-      country: 'Global',
-      status: 'active',
-      manager_name: 'Big Data Manager',
-      manager_email: `manager_${name.toLowerCase().replace(/ /g, '_')}@example.com`
-    });
-    warehouseIds.push(doc.id);
-  }
-
-  // 2. More Suppliers
-  const supplierNames = [
-    'Quantum Components', 'Nebula Logistics', 'Solar Systems Mfg', 'Titan Hardware',
-    'Aura Electronics', 'Vertex Solutions', 'Infinity Parts', 'Omega Distribution',
-    'Prism Manufacturing', 'Nova Tech'
-  ];
-  const supplierIds: string[] = [];
-  for (const name of supplierNames) {
-    const doc = await addDoc(collection(db, 'suppliers'), {
-      name,
-      contact_info: `contact@${name.toLowerCase().replace(/ /g, '')}.com`,
-      country: 'International',
-      status: 'active',
-      lead_time_days: Math.floor(Math.random() * 20) + 5
-    });
-    supplierIds.push(doc.id);
-  }
-
-  // 3. More Brands
-  const brandNames = ['Hyperion', 'Aether', 'Chronos', 'Gaia', 'Eros'];
-  const brandIds: string[] = [];
-  for (const name of brandNames) {
-    const doc = await addDoc(collection(db, 'brands'), {
-      name,
-      country_of_origin: 'Various',
-      status: 'active'
-    });
-    brandIds.push(doc.id);
-  }
-
-  // 4. More Categories
-  const categoryNames = ['Audio', 'Storage', 'Displays', 'Input Devices', 'Power'];
-  const categoryIds: string[] = [];
-  for (const name of categoryNames) {
-    const doc = await addDoc(collection(db, 'categories'), { name });
-    categoryIds.push(doc.id);
-  }
-
-  // 5. More Products & Variants
-  const productTemplates = [
-    { name: 'Headphones', cat: 0 }, { name: 'SSD Drive', cat: 1 }, { name: 'Monitor', cat: 2 },
-    { name: 'Keyboard', cat: 3 }, { name: 'Power Bank', cat: 4 }, { name: 'Speaker', cat: 0 },
-    { name: 'Flash Drive', cat: 1 }, { name: 'Webcam', cat: 2 }, { name: 'Mouse Pad', cat: 3 },
-    { name: 'Cable', cat: 4 }, { name: 'Microphone', cat: 0 }, { name: 'Hard Drive', cat: 1 },
-    { name: 'Projector', cat: 2 }, { name: 'Stylus', cat: 3 }, { name: 'Charger', cat: 4 }
+  const warehouses = [
+    { name: 'Midwest Hub', location: 'Chicago, Illinois', country: 'USA', manual_manager_name: 'Mia Alvarez', manual_manager_phone: '+1 312 555 0137', manual_manager_email: 'mia.alvarez@midwesthub.example' },
+    { name: 'Pacific Gateway', location: 'Long Beach, California', country: 'USA', manual_manager_name: 'Jason Reed', manual_manager_phone: '+1 562 555 0188', manual_manager_email: 'jason.reed@pacificgateway.example' },
+    { name: 'Northern Relay', location: 'Toronto, Ontario', country: 'Canada', manual_manager_name: 'Leila Khan', manual_manager_phone: '+1 416 555 0174', manual_manager_email: 'leila.khan@northernrelay.example' },
+    { name: 'Gulf Distribution', location: 'Dubai', country: 'UAE', manual_manager_name: 'Omar Haddad', manual_manager_phone: '+971 4 555 0131', manual_manager_email: 'omar.haddad@gulfdistribution.example' },
   ];
 
-  for (let i = 0; i < productTemplates.length; i++) {
-    const template = productTemplates[i];
-    const brandId = brandIds[Math.floor(Math.random() * brandIds.length)];
-    const supplierId = supplierIds[Math.floor(Math.random() * supplierIds.length)];
-    const categoryId = categoryIds[template.cat];
+  const suppliers = [
+    { supplier_code: 'SUP-ALPHA01', name: 'Quantum Components', email: 'hello@quantumcomponents.com', phone: '+1 408 555 0121', country: 'USA' },
+    { supplier_code: 'SUP-ALPHA02', name: 'Nebula Logistics', email: 'team@nebulalogistics.com', phone: '+44 20 5550 1031', country: 'United Kingdom' },
+    { supplier_code: 'SUP-ALPHA03', name: 'Solar Systems MFG', email: 'sales@solarsystemsmfg.com', phone: '+49 30 5550 2190', country: 'Germany' },
+    { supplier_code: 'SUP-ALPHA04', name: 'Titan Hardware', email: 'contact@titanhardware.com', phone: '+81 3 5550 4482', country: 'Japan' },
+    { supplier_code: 'SUP-ALPHA05', name: 'Aura Electronics', email: 'orders@auraelectronics.com', phone: '+65 6555 2019', country: 'Singapore' },
+    { supplier_code: 'SUP-ALPHA06', name: 'Vertex Mobility', email: 'support@vertexmobility.com', phone: '+971 50 555 8110', country: 'UAE' },
+  ];
 
-    const pDoc = await addDoc(collection(db, 'products'), {
-      name: `${brandNames[Math.floor(Math.random() * brandNames.length)]} ${template.name} Pro`,
-      sku: `SKU-${Math.random().toString(36).substring(7).toUpperCase()}`,
-      brand_id: brandId,
-      category_id: categoryId,
-      supplier_id: supplierId,
+  const brands = [
+    { name: 'Chronos', country_of_origin: 'Switzerland', logo_url: 'https://images.unsplash.com/photo-1545239351-1141bd82e8a6?auto=format&fit=crop&q=80&w=300', status: 'active' },
+    { name: 'Aether', country_of_origin: 'Sweden', logo_url: 'https://images.unsplash.com/photo-1511499767150-a48a237f0083?auto=format&fit=crop&q=80&w=300', status: 'active' },
+    { name: 'Hyperion', country_of_origin: 'USA', logo_url: 'https://images.unsplash.com/photo-1525547719571-a2d4ac8945e2?auto=format&fit=crop&q=80&w=300', status: 'active' },
+    { name: 'Gaia', country_of_origin: 'Denmark', logo_url: 'https://images.unsplash.com/photo-1518770660439-4636190af475?auto=format&fit=crop&q=80&w=300', status: 'active' },
+  ];
+
+  const categories = [
+    { name: 'Computing' },
+    { name: 'Audio' },
+    { name: 'Displays' },
+    { name: 'Networking' },
+    { name: 'Accessories' },
+  ];
+
+  const clients = [
+    { client_code: 'CLI-5001', name: 'Northstar Studios', email: 'ops@northstarstudios.com', phone: '+1 646 555 1021', location: 'New York, USA', status: 'active' },
+    { client_code: 'CLI-5002', name: 'Atlas Retail Group', email: 'purchasing@atlasretail.com', phone: '+1 213 555 2022', location: 'Los Angeles, USA', status: 'active' },
+    { client_code: 'CLI-5003', name: 'Bluewave Systems', email: 'procurement@bluewavesystems.com', phone: '+44 20 5550 8892', location: 'London, UK', status: 'active' },
+    { client_code: 'CLI-5004', name: 'Orbit Media House', email: 'finance@orbitmediahouse.com', phone: '+971 4 555 2201', location: 'Dubai, UAE', status: 'active' },
+  ];
+
+  const products = [
+    {
+      name: 'Chronos Webcam Pro',
+      sku: 'CHR-WEB-PRO',
+      brand: 'Chronos',
+      category: 'Displays',
+      supplier: 'Quantum Components',
+      description: '4K studio webcam with AI framing, dual beam microphones, and low-light correction.',
+      image_url: 'https://images.unsplash.com/photo-1587829741301-dc798b83add3?auto=format&fit=crop&q=80&w=500',
+      variants: [
+        { variant_code: 'V2-267TCA', barcode: '14263500694', color: 'Graphite', size: '4K', reorder_threshold: 18, unit_cost: 74, unit_price: 129, photo_url: 'https://images.unsplash.com/photo-1587829741301-dc798b83add3?auto=format&fit=crop&q=80&w=500' },
+        { variant_code: 'V2-267TCB', barcode: '14263500695', color: 'Silver', size: '4K', reorder_threshold: 14, unit_cost: 79, unit_price: 139, photo_url: 'https://images.unsplash.com/photo-1527443154391-507e9dc6c5cc?auto=format&fit=crop&q=80&w=500' },
+      ],
+    },
+    {
+      name: 'Aether Studio Headphones',
+      sku: 'AET-AUD-710',
+      brand: 'Aether',
+      category: 'Audio',
+      supplier: 'Aura Electronics',
+      description: 'Closed-back reference headphones tuned for monitoring and content production.',
+      image_url: 'https://images.unsplash.com/photo-1505740420928-5e560c06d30e?auto=format&fit=crop&q=80&w=500',
+      variants: [
+        { variant_code: 'AET-HP-BLK', barcode: '22063500691', color: 'Black', size: 'Standard', reorder_threshold: 20, unit_cost: 92, unit_price: 169, photo_url: 'https://images.unsplash.com/photo-1505740420928-5e560c06d30e?auto=format&fit=crop&q=80&w=500' },
+        { variant_code: 'AET-HP-SND', barcode: '22063500692', color: 'Sand', size: 'Standard', reorder_threshold: 16, unit_cost: 96, unit_price: 175, photo_url: 'https://images.unsplash.com/photo-1546435770-a3e426bf472b?auto=format&fit=crop&q=80&w=500' },
+      ],
+    },
+    {
+      name: 'Hyperion Dock X9',
+      sku: 'HYP-DOCK-X9',
+      brand: 'Hyperion',
+      category: 'Computing',
+      supplier: 'Vertex Mobility',
+      description: 'Thunderbolt docking station with triple display support and 2.5Gb ethernet.',
+      image_url: 'https://images.unsplash.com/photo-1588872657578-7efd1f1555ed?auto=format&fit=crop&q=80&w=500',
+      variants: [
+        { variant_code: 'HYP-DOCK-GRY', barcode: '33063500691', color: 'Graphite', size: '12-port', reorder_threshold: 12, unit_cost: 138, unit_price: 239, photo_url: 'https://images.unsplash.com/photo-1588872657578-7efd1f1555ed?auto=format&fit=crop&q=80&w=500' },
+        { variant_code: 'HYP-DOCK-WHT', barcode: '33063500692', color: 'White', size: '12-port', reorder_threshold: 10, unit_cost: 142, unit_price: 245, photo_url: 'https://images.unsplash.com/photo-1587825140708-dfaf72ae4b04?auto=format&fit=crop&q=80&w=500' },
+      ],
+    },
+    {
+      name: 'Gaia Mesh Router',
+      sku: 'GAI-MESH-6',
+      brand: 'Gaia',
+      category: 'Networking',
+      supplier: 'Nebula Logistics',
+      description: 'Wi-Fi 6 mesh router for multi-floor deployments with app-based diagnostics.',
+      image_url: 'https://images.unsplash.com/photo-1647427060118-4911c9821b82?auto=format&fit=crop&q=80&w=500',
+      variants: [
+        { variant_code: 'GAI-MESH-WHT', barcode: '44063500691', color: 'White', size: '2-pack', reorder_threshold: 9, unit_cost: 124, unit_price: 219, photo_url: 'https://images.unsplash.com/photo-1647427060118-4911c9821b82?auto=format&fit=crop&q=80&w=500' },
+        { variant_code: 'GAI-MESH-BLK', barcode: '44063500692', color: 'Black', size: '3-pack', reorder_threshold: 7, unit_cost: 176, unit_price: 299, photo_url: 'https://images.unsplash.com/photo-1606904825846-647eb07f5be2?auto=format&fit=crop&q=80&w=500' },
+      ],
+    },
+    {
+      name: 'Chronos Creator Monitor',
+      sku: 'CHR-MON-27',
+      brand: 'Chronos',
+      category: 'Displays',
+      supplier: 'Titan Hardware',
+      description: '27-inch creator monitor with 98% DCI-P3 coverage and USB-C power delivery.',
+      image_url: 'https://images.unsplash.com/photo-1527443224154-c4a3942d3acf?auto=format&fit=crop&q=80&w=500',
+      variants: [
+        { variant_code: 'CHR-MON-27Q', barcode: '55063500691', color: 'Black', size: '27-inch', reorder_threshold: 8, unit_cost: 248, unit_price: 399, photo_url: 'https://images.unsplash.com/photo-1527443224154-c4a3942d3acf?auto=format&fit=crop&q=80&w=500' },
+        { variant_code: 'CHR-MON-32Q', barcode: '55063500692', color: 'Black', size: '32-inch', reorder_threshold: 6, unit_cost: 312, unit_price: 489, photo_url: 'https://images.unsplash.com/photo-1527443195645-1133f7f28990?auto=format&fit=crop&q=80&w=500' },
+      ],
+    },
+    {
+      name: 'Aether Travel Keyboard',
+      sku: 'AET-KEY-TRV',
+      brand: 'Aether',
+      category: 'Accessories',
+      supplier: 'Solar Systems MFG',
+      description: 'Compact low-profile wireless keyboard built for mobile teams and hybrid desks.',
+      image_url: 'https://images.unsplash.com/photo-1511467687858-23d96c32e4ae?auto=format&fit=crop&q=80&w=500',
+      variants: [
+        { variant_code: 'AET-KEY-GRY', barcode: '66063500691', color: 'Gray', size: '75%', reorder_threshold: 22, unit_cost: 48, unit_price: 89, photo_url: 'https://images.unsplash.com/photo-1511467687858-23d96c32e4ae?auto=format&fit=crop&q=80&w=500' },
+        { variant_code: 'AET-KEY-NVY', barcode: '66063500692', color: 'Navy', size: '75%', reorder_threshold: 18, unit_cost: 52, unit_price: 95, photo_url: 'https://images.unsplash.com/photo-1541140532154-b024d705b90a?auto=format&fit=crop&q=80&w=500' },
+      ],
+    },
+  ];
+
+  const warehouseRefs: Record<string, string> = {};
+  for (const warehouse of warehouses) {
+    const document = await addDoc(collection(db, 'warehouses'), {
+      ...warehouse,
       status: 'active',
-      description: `High quality ${template.name} for professional use.`
+      created_at: new Date().toISOString(),
+      last_modified: new Date().toISOString(),
+    });
+    warehouseRefs[warehouse.name] = document.id;
+  }
+
+  const supplierRefs: Record<string, string> = {};
+  for (const supplier of suppliers) {
+    const document = await addDoc(collection(db, 'suppliers'), {
+      ...supplier,
+      contact_info: supplier.email,
+      status: 'active',
+      created_at: new Date().toISOString(),
+      last_modified: new Date().toISOString(),
+    });
+    supplierRefs[supplier.name] = document.id;
+  }
+
+  const brandRefs: Record<string, string> = {};
+  for (const brand of brands) {
+    const document = await addDoc(collection(db, 'brands'), {
+      ...brand,
+      created_at: new Date().toISOString(),
+      last_modified: new Date().toISOString(),
+    });
+    brandRefs[brand.name] = document.id;
+  }
+
+  const categoryRefs: Record<string, string> = {};
+  for (const category of categories) {
+    const document = await addDoc(collection(db, 'categories'), {
+      ...category,
+      created_at: new Date().toISOString(),
+      last_modified: new Date().toISOString(),
+    });
+    categoryRefs[category.name] = document.id;
+  }
+
+  const clientRefs: string[] = [];
+  for (const client of clients) {
+    const document = await addDoc(collection(db, 'clients'), {
+      ...client,
+      created_at: new Date().toISOString(),
+      last_modified: new Date().toISOString(),
+    });
+    clientRefs.push(document.id);
+  }
+
+  const variantRefs: { id: string; productName: string; supplierId: string }[] = [];
+  const warehouseCycle = Object.values(warehouseRefs);
+
+  for (let productIndex = 0; productIndex < products.length; productIndex += 1) {
+    const product = products[productIndex];
+    const productDocument = await addDoc(collection(db, 'products'), {
+      name: product.name,
+      sku: product.sku,
+      brand_id: brandRefs[product.brand],
+      category_id: categoryRefs[product.category],
+      supplier_id: supplierRefs[product.supplier],
+      description: product.description,
+      image_url: product.image_url,
+      status: 'active',
+      created_at: new Date().toISOString(),
+      last_modified: new Date().toISOString(),
     });
 
-    // Add 2 variants per product
-    for (let j = 1; j <= 2; j++) {
-      const vDoc = await addDoc(collection(db, 'product_variants'), {
-        product_id: pDoc.id,
-        variant_code: `V-${j}-${Math.random().toString(36).substring(7).toUpperCase()}`,
-        barcode: Math.floor(Math.random() * 1000000000000).toString(),
-        color: j === 1 ? 'Black' : 'White',
-        size: 'Standard',
-        reorder_threshold: 10 + Math.floor(Math.random() * 20),
-        unit_cost: 20 + Math.floor(Math.random() * 200),
-        unit_price: 50 + Math.floor(Math.random() * 500),
-        status: 'active'
+    for (let variantIndex = 0; variantIndex < product.variants.length; variantIndex += 1) {
+      const variant = product.variants[variantIndex];
+      const variantDocument = await addDoc(collection(db, 'product_variants'), {
+        product_id: productDocument.id,
+        ...variant,
+        unit_price: variant.unit_price,
+        status: 'active',
+        created_at: new Date().toISOString(),
+        last_modified: new Date().toISOString(),
       });
 
-      // Add stock in 2 random warehouses
-      const shuffledWarehouses = [...warehouseIds].sort(() => 0.5 - Math.random());
-      for (let k = 0; k < 2; k++) {
-        const warehouseId = shuffledWarehouses[k];
-        const qty = 50 + Math.floor(Math.random() * 150);
+      variantRefs.push({ id: variantDocument.id, productName: product.name, supplierId: supplierRefs[product.supplier] });
+
+      for (let warehouseOffset = 0; warehouseOffset < 2; warehouseOffset += 1) {
+        const warehouseId = warehouseCycle[(productIndex + variantIndex + warehouseOffset) % warehouseCycle.length];
+        const quantity = 18 + productIndex * 6 + variantIndex * 5 + warehouseOffset * 4;
 
         await addDoc(collection(db, 'inventory_balances'), {
-          variant_id: vDoc.id,
+          variant_id: variantDocument.id,
           warehouse_id: warehouseId,
-          available_quantity: qty,
-          reserved_quantity: 0,
+          available_quantity: quantity,
+          reserved_quantity: warehouseOffset === 0 ? 2 : 0,
           blocked_quantity: 0,
           version: 1,
-          last_modified: new Date().toISOString()
+          last_modified: new Date().toISOString(),
         });
 
         await addDoc(collection(db, 'stock_movements'), {
-          variant_id: vDoc.id,
+          variant_id: variantDocument.id,
           warehouse_id: warehouseId,
           movement_type: 'receipt',
-          quantity: qty,
-          idempotency_key: `big_seed_${vDoc.id}_${warehouseId}`,
-          timestamp: new Date().toISOString(),
-          notes: 'Bulk stock import',
-          status: 'completed'
+          quantity,
+          idempotency_key: `curated_big_seed_${variantDocument.id}_${warehouseId}`,
+          timestamp: new Date(Date.now() - (productIndex + warehouseOffset) * 3600_000).toISOString(),
+          notes: `Curated stock load for ${product.name}`,
+          status: 'completed',
         });
       }
     }
   }
 
-  // 6. More Purchase Orders
-  console.log('Seeding POs...');
-  for (let i = 0; i < 10; i++) {
-    const supplierId = supplierIds[Math.floor(Math.random() * supplierIds.length)];
-    const warehouseId = warehouseIds[Math.floor(Math.random() * warehouseIds.length)];
-    const randomProductIdx = Math.floor(Math.random() * productTemplates.length);
-    // We need to find a variant for this product. This is tricky since we don't have the IDs easily.
-    // Let's just pick random variants from the collection.
-    const variantsSnap = await getDocs(query(collection(db, 'product_variants'), limit(20)));
-    const randomVariant = variantsSnap.docs[Math.floor(Math.random() * variantsSnap.size)];
-    
-    if (randomVariant) {
-      const qty = 50 + Math.floor(Math.random() * 100);
-      const cost = 20 + Math.floor(Math.random() * 100);
-      await addDoc(collection(db, 'purchase_orders'), {
-        supplier_id: supplierId,
-        warehouse_id: warehouseId,
-        items: [{ variant_id: randomVariant.id, quantity: qty, unit_cost: cost }],
-        total_amount: qty * cost,
-        status: ['sent', 'in_transit', 'received'][Math.floor(Math.random() * 3)],
-        expected_delivery_date: new Date(Date.now() + (Math.random() * 10 * 24 * 60 * 60 * 1000)).toISOString(),
-        created_at: new Date(Date.now() - (Math.random() * 5 * 24 * 60 * 60 * 1000)).toISOString()
-      });
-    }
+  for (let index = 0; index < variantRefs.length; index += 2) {
+    const variant = variantRefs[index];
+    const warehouseId = warehouseCycle[index % warehouseCycle.length];
+    const quantity = 20 + index * 2;
+    const unitCost = 45 + index * 5;
+
+    await addDoc(collection(db, 'purchase_orders'), {
+      supplier_id: variant.supplierId,
+      warehouse_id: warehouseId,
+      items: [{ variant_id: variant.id, quantity, unit_cost: unitCost }],
+      total_amount: quantity * unitCost,
+      status: index % 4 === 0 ? 'in_transit' : 'sent',
+      expected_delivery_date: new Date(Date.now() + (index + 2) * 24 * 60 * 60 * 1000).toISOString(),
+      created_at: new Date(Date.now() - index * 12 * 60 * 60 * 1000).toISOString(),
+    });
   }
 
-  // 7. More Revenue Invoices
-  console.log('Seeding Invoices...');
-  const customers = ['Tech Corp', 'Future Systems', 'Cloud Dynamics', 'Smart Solutions', 'Elite Services'];
-  for (let i = 0; i < 15; i++) {
-    const warehouseId = warehouseIds[Math.floor(Math.random() * warehouseIds.length)];
-    const variantsSnap = await getDocs(query(collection(db, 'product_variants'), limit(20)));
-    const randomVariant = variantsSnap.docs[Math.floor(Math.random() * variantsSnap.size)];
-
-    if (randomVariant) {
-      const qty = 5 + Math.floor(Math.random() * 20);
-      const price = 100 + Math.floor(Math.random() * 500);
-      await addDoc(collection(db, 'revenue_invoices'), {
-        invoice_number: `INV-BIG-${1000 + i}`,
-        customer_name: customers[Math.floor(Math.random() * customers.length)],
-        items: [{ variant_id: randomVariant.id, quantity: qty, unit_price: price, total: qty * price }],
-        total_amount: qty * price,
-        status: ['pending', 'paid'][Math.floor(Math.random() * 2)],
-        warehouse_id: warehouseId,
-        created_at: new Date(Date.now() - (Math.random() * 30 * 24 * 60 * 60 * 1000)).toISOString()
-      });
-    }
+  for (let index = 0; index < 4; index += 1) {
+    const variant = variantRefs[index];
+    await addDoc(collection(db, 'backorders'), {
+      variant_id: variant.id,
+      warehouse_id: warehouseCycle[(index + 1) % warehouseCycle.length],
+      quantity: 6 + index * 3,
+      order_reference: `SO-BACK-CURATED-${index + 1}`,
+      status: 'pending',
+      created_at: new Date(Date.now() - index * 24 * 60 * 60 * 1000).toISOString(),
+    });
   }
 
-  // 8. More Backorders
-  console.log('Seeding Backorders...');
-  for (let i = 0; i < 5; i++) {
-    const warehouseId = warehouseIds[Math.floor(Math.random() * warehouseIds.length)];
-    const variantsSnap = await getDocs(query(collection(db, 'product_variants'), limit(20)));
-    const randomVariant = variantsSnap.docs[Math.floor(Math.random() * variantsSnap.size)];
-
-    if (randomVariant) {
-      await addDoc(collection(db, 'backorders'), {
-        variant_id: randomVariant.id,
-        warehouse_id: warehouseId,
-        quantity: 10 + Math.floor(Math.random() * 30),
-        order_reference: `SO-BACK-BIG-${i}`,
-        status: 'pending',
-        created_at: new Date(Date.now() - (Math.random() * 3 * 24 * 60 * 60 * 1000)).toISOString()
-      });
-    }
+  for (let index = 0; index < 5; index += 1) {
+    const variant = variantRefs[index];
+    await addDoc(collection(db, 'reservations'), {
+      variant_id: variant.id,
+      warehouse_id: warehouseCycle[index % warehouseCycle.length],
+      quantity: 2 + index,
+      order_reference: `SO-RES-CURATED-${index + 1}`,
+      expiry_timestamp: new Date(Date.now() + (index + 6) * 60 * 60 * 1000).toISOString(),
+      status: 'active',
+      created_at: new Date().toISOString(),
+    });
   }
 
-  // 9. More Reservations
-  console.log('Seeding Reservations...');
-  for (let i = 0; i < 8; i++) {
-    const warehouseId = warehouseIds[Math.floor(Math.random() * warehouseIds.length)];
-    const variantsSnap = await getDocs(query(collection(db, 'product_variants'), limit(20)));
-    const randomVariant = variantsSnap.docs[Math.floor(Math.random() * variantsSnap.size)];
-
-    if (randomVariant) {
-      const qty = 2 + Math.floor(Math.random() * 10);
-      await addDoc(collection(db, 'reservations'), {
-        variant_id: randomVariant.id,
-        warehouse_id: warehouseId,
-        quantity: qty,
-        order_reference: `SO-RES-BIG-${i}`,
-        expiry_timestamp: new Date(Date.now() + (Math.random() * 48 * 60 * 60 * 1000)).toISOString(),
-        status: 'active',
-        created_at: new Date().toISOString()
-      });
-    }
+  for (let index = 0; index < 6; index += 1) {
+    const variant = variantRefs[index];
+    const quantity = 3 + index;
+    const unitPrice = 120 + index * 25;
+    await addDoc(collection(db, 'revenue_invoices'), {
+      invoice_number: `INV-CURATED-${100 + index}`,
+      customer_name: clients[index % clients.length].name,
+      client_id: clientRefs[index % clientRefs.length],
+      items: [{ variant_id: variant.id, quantity, unit_price: unitPrice, total: quantity * unitPrice }],
+      total_amount: quantity * unitPrice,
+      status: index % 2 === 0 ? 'paid' : 'pending',
+      warehouse_id: warehouseCycle[index % warehouseCycle.length],
+      created_at: new Date(Date.now() - index * 48 * 60 * 60 * 1000).toISOString(),
+    });
   }
 
-  console.log('Big data seeding complete!');
+  console.log('Curated big data seeding complete!');
 }
