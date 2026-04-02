@@ -90,7 +90,42 @@ service cloud.firestore {
       allow write: if isAuthenticated();
     }
 
+    match /purchase_invoices/{id} {
+      allow read: if isAuthenticated();
+      allow write: if isAuthenticated();
+    }
+
+    match /return_invoices/{id} {
+      allow read: if isAuthenticated();
+      allow write: if isAuthenticated();
+    }
+
+    match /client_payments/{id} {
+      allow read: if isAuthenticated();
+      allow write: if isAuthenticated();
+    }
+
+    match /warehouse_expenses/{id} {
+      allow read: if isAuthenticated();
+      allow write: if isAuthenticated();
+    }
+
+    match /inventory_update_records/{id} {
+      allow read: if isAuthenticated();
+      allow write: if isAuthenticated();
+    }
+
+    match /supplier_product_relations/{id} {
+      allow read: if isAuthenticated();
+      allow write: if isAuthenticated();
+    }
+
     match /receipt_invoices/{id} {
+      allow read: if isAuthenticated();
+      allow write: if isAuthenticated();
+    }
+
+    match /transfer_invoices/{id} {
       allow read: if isAuthenticated();
       allow write: if isAuthenticated();
     }

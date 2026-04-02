@@ -7,7 +7,8 @@ import { toast } from 'sonner';
 import { handleFirestoreError, OperationType } from '../lib/firestore-errors';
 import { cn } from '../lib/utils';
 import AutocompleteSearch from './AutocompleteSearch';
-import { useOutletContext } from 'react-router-dom';
+import { useNavigate, useOutletContext } from 'react-router-dom';
+import { removeDemoCollectionItem, saveDemoCollectionItem } from '../demo/demoDatabase';
 
 interface MasterDataProps {
   collectionName: string;
@@ -60,6 +61,26 @@ const createSupplierCode = (existingSuppliers: any[]) => {
   return code;
 };
 
+const normalizeWarehousePayload = (payload: any) => {
+  if (!payload || typeof payload !== 'object') return payload;
+
+  const managerId = typeof payload.manager_id === 'string' ? payload.manager_id.trim() : '';
+  if (!managerId) {
+    return {
+      ...payload,
+      manager_id: '',
+    };
+  }
+
+  return {
+    ...payload,
+    manager_id: managerId,
+    manual_manager_name: '',
+    manual_manager_phone: '',
+    manual_manager_email: '',
+  };
+};
+
 export default function MasterDataPage({
   collectionName,
   title,
@@ -71,6 +92,7 @@ export default function MasterDataPage({
   hideStatus = false,
   hardDelete = false,
 }: MasterDataProps) {
+  const navigate = useNavigate();
   const [data, setData] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -87,7 +109,94 @@ export default function MasterDataPage({
   const [selectedRelatedProduct, setSelectedRelatedProduct] = useState<any>(null);
 
   const outletContext = useOutletContext<any>() || {};
-  const { balances = [], variants = [], warehouses = [], handleVariantClick } = outletContext;
+  const {
+    isDemoMode,
+    balances = [],
+    variants = [],
+    warehouses = [],
+    products: ctxProducts = [],
+    brands: ctxBrands = [],
+    categories: ctxCategories = [],
+    suppliers: ctxSuppliers = [],
+    clients: ctxClients = [],
+    movements = [],
+    revenueInvoices = [],
+    purchaseInvoices = [],
+    transfers = [],
+    handleVariantClick,
+    user
+  } = outletContext;
+
+  const [isEditingManagerInfo, setIsEditingManagerInfo] = useState(false);
+  const [managerFormData, setManagerFormData] = useState({ phone: '', email: '' });
+
+  const handleManagerInfoUpdate = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!viewingItem || collectionName !== 'warehouses') return;
+    if (viewingItem.manager_id) {
+      toast.info('This warehouse uses a system manager. Update contact details from the user profile instead.');
+      setIsEditingManagerInfo(false);
+      return;
+    }
+
+    try {
+      const updates: any = {
+        last_modified: new Date().toISOString()
+      };
+
+      // If it's a system manager, we might want to update the 'users' collection too, 
+      // but according to requirements "only the manager themselves" can edit.
+      // The current implementation uses 'manual_manager_email' and 'manual_manager_phone' for manual records.
+      // If it's a system manager, we update the warehouse record's view of them or the user record.
+      // Let's assume we update the warehouse's manual fields if it's not a system manager, 
+      // or we provide a way to overriding. 
+      // Actually, let's stick to the manual fields for now as they are what's displayed in getWarehouseManagerSummary.
+
+      updates.manual_manager_phone = managerFormData.phone;
+      updates.manual_manager_email = managerFormData.email;
+
+      if (isDemoMode) {
+        saveDemoCollectionItem('warehouses', {
+          ...viewingItem,
+          ...updates,
+        });
+      } else {
+        const warehouseRef = doc(db, 'warehouses', viewingItem.id);
+        await updateDoc(warehouseRef, updates);
+      }
+
+      // Update viewingItem locally to reflect changes immediately
+      setViewingItem({
+        ...viewingItem,
+        ...updates
+      });
+
+      toast.success('Manager info updated successfully');
+      setIsEditingManagerInfo(false);
+    } catch (error) {
+      console.error('Failed to update manager info:', error);
+      let message = 'Failed to update manager info';
+      try {
+        const errObj = JSON.parse((error as Error).message);
+        message = errObj.error || message;
+      } catch {
+        if (error instanceof Error && error.message) {
+          message = error.message;
+        }
+      }
+      toast.error(message);
+    }
+  };
+
+  const demoDataMap: Record<string, any[]> = {
+    brands: ctxBrands,
+    categories: ctxCategories,
+    suppliers: ctxSuppliers,
+    clients: ctxClients,
+    warehouses: warehouses,
+    products: ctxProducts,
+    product_variants: variants,
+  };
 
   const effectiveUniqueFields = useMemo(() => {
     if (uniqueFields && uniqueFields.length > 0) return uniqueFields;
@@ -107,6 +216,12 @@ export default function MasterDataPage({
   }, [tableFields]);
 
   useEffect(() => {
+    if (isDemoMode) {
+      setData(demoDataMap[collectionName] || []);
+      setLoading(false);
+      return;
+    }
+
     const q = query(collection(db, collectionName), orderBy(sortField, 'asc'));
     const unsubscribe = onSnapshot(q, (snapshot) => {
       const items = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
@@ -117,9 +232,14 @@ export default function MasterDataPage({
       setLoading(false);
     });
     return () => unsubscribe();
-  }, [collectionName, sortField]);
+  }, [collectionName, sortField, isDemoMode, demoDataMap[collectionName]]);
 
   useEffect(() => {
+    if (isDemoMode) {
+      setRelatedProducts(ctxProducts);
+      return;
+    }
+
     if (!shouldLoadRelatedProducts) {
       setRelatedProducts([]);
       return;
@@ -132,9 +252,18 @@ export default function MasterDataPage({
     });
 
     return () => unsubscribe();
-  }, [shouldLoadRelatedProducts]);
+  }, [shouldLoadRelatedProducts, isDemoMode, ctxProducts]);
 
   useEffect(() => {
+    if (isDemoMode) {
+      setProductLookups({
+        brands: ctxBrands,
+        categories: ctxCategories,
+        suppliers: ctxSuppliers
+      });
+      return;
+    }
+
     if (!shouldLoadRelatedProducts) {
       setProductLookups({ brands: [], categories: [], suppliers: [] });
       return;
@@ -163,7 +292,7 @@ export default function MasterDataPage({
       unsubCategories();
       unsubSuppliers();
     };
-  }, [shouldLoadRelatedProducts]);
+  }, [shouldLoadRelatedProducts, isDemoMode, ctxBrands, ctxCategories, ctxSuppliers]);
 
   const getSelectLabel = (field: MasterDataProps['fields'][number], value: string) => {
     return field.options?.find((option) => option.value === value)?.label || value;
@@ -206,10 +335,92 @@ export default function MasterDataPage({
     });
   }, [collectionName, relatedProducts, shouldLoadRelatedProducts, viewingItem]);
 
+  const clientActivityForViewingItem = useMemo(() => {
+    if (!viewingItem || collectionName !== 'clients') return [];
+
+    return transfers
+      .filter((transfer: any) => {
+        if (!['buy', 'sell', 'buy_order'].includes(String(transfer.transfer_type || ''))) return false;
+        if (viewingItem.id && transfer.client_id === viewingItem.id) return true;
+        const clientName = String(viewingItem.name || '').trim().toLowerCase();
+        return clientName && String(transfer.customer_name || '').trim().toLowerCase() === clientName;
+      })
+      .map((transfer: any) => {
+        const linkedMovement = movements.find((movement: any) =>
+          movement.id === transfer.movement_id ||
+          movement.id === transfer.movement_in_id ||
+          movement.id === transfer.movement_out_id
+        );
+        const linkedInvoice = transfer.revenue_invoice_id
+          ? revenueInvoices.find((invoice: any) => invoice.id === transfer.revenue_invoice_id)
+          : transfer.purchase_invoice_id
+            ? purchaseInvoices.find((invoice: any) => invoice.id === transfer.purchase_invoice_id)
+            : null;
+        const warehouseName = getWarehouseName(
+          transfer.warehouse_id || linkedInvoice?.warehouse_id || linkedInvoice?.receiving_warehouse_id
+        );
+        const totalQuantity = Number(
+          transfer.quantity
+          ?? linkedInvoice?.quantity_purchased
+          ?? linkedInvoice?.requested_quantity
+          ?? (Array.isArray(linkedInvoice?.items)
+            ? linkedInvoice.items.reduce((sum: number, item: any) => sum + Number(item.quantity || 0), 0)
+            : 0)
+        );
+
+        return {
+          ...transfer,
+          invoice_number: linkedInvoice?.invoice_number || 'N/A',
+          total_amount: Number(transfer.total_amount ?? linkedInvoice?.total_amount ?? linkedInvoice?.total_cost ?? 0),
+          status: transfer.status || linkedInvoice?.status || 'N/A',
+          linkedMovement,
+          linkedInvoice,
+          warehouseName,
+          totalQuantity,
+          transferTypeLabel: transfer.transfer_type === 'sell' ? 'sell' : 'buy',
+        };
+      })
+      .sort((a: any, b: any) => {
+        const aTime = new Date(a.created_at || a.timestamp || 0).getTime();
+        const bTime = new Date(b.created_at || b.timestamp || 0).getTime();
+        return bTime - aTime;
+      });
+  }, [collectionName, getWarehouseName, movements, purchaseInvoices, revenueInvoices, transfers, viewingItem]);
+
+  const supplierActivityForViewingItem = useMemo(() => {
+    if (!viewingItem || collectionName !== 'suppliers') return [];
+
+    const supplierProductIds = ctxProducts
+      .filter((product) => product.supplier_id === viewingItem.id)
+      .map((product) => product.id);
+    const supplierVariantIds = variants
+      .filter((variant) => supplierProductIds.includes(variant.product_id))
+      .map((variant) => variant.id);
+
+    return movements
+      .filter((movement: any) => supplierVariantIds.includes(movement.variant_id))
+      .map((movement: any) => {
+        const variant = variants.find((entry: any) => entry.id === movement.variant_id);
+        const product = ctxProducts.find((entry) => entry.id === variant?.product_id);
+
+        return {
+          ...movement,
+          warehouseName: getWarehouseName(movement.warehouse_id),
+          variantLabel: variant ? `${product?.name || 'Unknown Product'} / ${variant.variant_code || variant.barcode}` : 'N/A',
+        };
+      })
+      .sort((a: any, b: any) => new Date(b.timestamp || 0).getTime() - new Date(a.timestamp || 0).getTime())
+      .slice(0, 10);
+  }, [collectionName, ctxProducts, getWarehouseName, movements, variants, viewingItem]);
+
   const childCategoriesForViewingItem = useMemo(() => {
     if (!viewingItem || collectionName !== 'categories') return [];
     return data.filter((category) => category.parent_category_id === viewingItem.id);
   }, [collectionName, data, viewingItem]);
+
+  function getWarehouseName(id: string) {
+    return warehouses.find((w: any) => w.id === id)?.name || id;
+  }
 
   const openRelatedProductDetails = (product: any) => {
     const brand = productLookups.brands.find((item) => item.id === product.brand_id);
@@ -240,16 +451,35 @@ export default function MasterDataPage({
     });
   };
 
-  const getWarehouseName = (id: string) => {
-    return warehouses.find((w: any) => w.id === id)?.name || id;
-  };
-
   const openItemDetails = (item: any) => {
     if (onView) {
       onView(item);
       return;
     }
     setViewingItem(item);
+  };
+
+  const getDetailsRoute = (item: any) => {
+    if (!item?.id) return null;
+
+    switch (collectionName) {
+      case 'clients':
+        return `/clients/${item.id}/transfers`;
+      case 'suppliers':
+        return `/suppliers/${item.id}/transfers`;
+      case 'warehouses':
+        return `/warehouses/${item.id}/details`;
+      case 'brands':
+        return `/brands/${item.id}/details`;
+      case 'categories':
+        return `/categories/${item.id}/details`;
+      case 'products':
+        return `/products/${item.id}/details`;
+      case 'product_variants':
+        return `/variants/${item.id}/details`;
+      default:
+        return null;
+    }
   };
 
   const openCreateModal = () => {
@@ -260,7 +490,7 @@ export default function MasterDataPage({
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!auth.currentUser) {
+    if (!isDemoMode && !auth.currentUser) {
       toast.error('You must be signed in to perform this action');
       return;
     }
@@ -281,14 +511,28 @@ export default function MasterDataPage({
       }
     }
 
-    const basePayload = {
+    const rawPayload = {
       ...formData,
       ...(collectionName === 'suppliers' && !formData.supplier_code ? { supplier_code: createSupplierCode(data) } : {}),
       last_modified: new Date().toISOString()
     };
+    const basePayload = collectionName === 'warehouses'
+      ? normalizeWarehousePayload(rawPayload)
+      : rawPayload;
 
     try {
-      if (editingId) {
+      if (isDemoMode) {
+        const payload = editingId
+          ? { ...basePayload, id: editingId }
+          : {
+              ...basePayload,
+              ...(hideStatus ? {} : { status: formData.status || 'active' }),
+              created_at: new Date().toISOString(),
+            };
+
+        saveDemoCollectionItem(collectionName as any, payload);
+        toast.success(`${title} ${editingId ? 'updated' : 'created'} successfully`);
+      } else if (editingId) {
         try {
           await updateDoc(doc(db, collectionName, editingId), basePayload);
         } catch (error) {
@@ -324,6 +568,18 @@ export default function MasterDataPage({
   };
 
   const handleDelete = async (id: string) => {
+    if (isDemoMode) {
+      if (hardDelete) {
+        removeDemoCollectionItem(collectionName as any, id);
+      } else {
+        const currentItem = data.find((item) => item.id === id);
+        if (currentItem) {
+          saveDemoCollectionItem(collectionName as any, { ...currentItem, status: 'inactive' });
+        }
+      }
+      toast.success(`${title} ${hardDelete ? 'deleted' : 'deactivated'}`);
+      return;
+    }
     try {
       if (hardDelete) {
         await deleteDoc(doc(db, collectionName, id));
@@ -434,22 +690,22 @@ export default function MasterDataPage({
   };
 
   return (
-    <div className="space-y-6">
+    <div className="app-page">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight">{title}</h1>
-          <p className="text-gray-500 text-sm">Manage your {title.toLowerCase()} reference data.</p>
+          <h1 className="app-title">{title}</h1>
+          <p className="app-subtitle">Manage your {title.toLowerCase()} reference data.</p>
         </div>
         <button
           onClick={openCreateModal}
-          className="bg-black text-white px-4 py-2 rounded-xl font-semibold flex items-center gap-2 hover:bg-gray-800 transition-all shadow-lg"
+          className="app-button-primary"
         >
           <Plus className="w-5 h-5" />
           Add {title}
         </button>
       </div>
 
-      <div className="bg-white rounded-3xl shadow-sm border border-gray-100">
+      <div className="app-surface">
         <div className="p-4 border-b border-gray-100 flex items-center gap-4">
           <div className="flex-1 relative">
             <AutocompleteSearch
@@ -594,7 +850,10 @@ export default function MasterDataPage({
               initial={{ opacity: 0, scale: 0.95 }}
               animate={{ opacity: 1, scale: 1 }}
               exit={{ opacity: 0, scale: 0.95 }}
-              className="relative bg-white rounded-3xl shadow-2xl w-full max-w-lg overflow-hidden"
+              className={cn(
+                "relative bg-white rounded-3xl shadow-2xl w-full overflow-hidden",
+                collectionName === 'clients' ? "max-w-4xl" : "max-w-lg"
+              )}
             >
               <div className="p-6 border-b border-gray-100 flex items-center justify-between">
                 <h3 className="text-xl font-bold">{title} Details</h3>
@@ -624,20 +883,264 @@ export default function MasterDataPage({
                   ))}
                 </div>
 
+                {getDetailsRoute(viewingItem) && !['clients', 'suppliers'].includes(collectionName) && (
+                  <div className="flex items-center justify-between rounded-2xl bg-gray-50 px-4 py-3">
+                    <p className="text-[10px] font-bold uppercase tracking-widest text-gray-400">Detailed Report</p>
+                    <button
+                      type="button"
+                      onClick={() => navigate(getDetailsRoute(viewingItem)!)}
+                      className="rounded-xl bg-black px-4 py-2 text-xs font-bold text-white hover:bg-gray-800 transition-all active:scale-95"
+                    >
+                      Open
+                    </button>
+                  </div>
+                )}
                 {collectionName === 'warehouses' && (
                   <div className="rounded-2xl bg-gray-50 p-4">
-                    <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest block mb-2">Manager Info</label>
-                    <p className="text-sm font-bold text-gray-800">{getWarehouseManagerSummary(viewingItem).name}</p>
-                    <p className="text-xs text-gray-500 mt-1">{getWarehouseManagerSummary(viewingItem).sourceMessage}</p>
-                    <div className="grid grid-cols-2 gap-4 mt-4">
+                    <div className="flex items-center justify-between mb-2">
+                      <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest block">Manager Info</label>
+                      {(() => {
+                        const mgr = getWarehouseManagerSummary(viewingItem);
+                        const isSystemManager = Boolean(viewingItem.manager_id);
+                        const isManager = user && (user.email === mgr.email || user.uid === viewingItem.manager_id);
+                        const isMissingInfo = mgr.phone === 'N/A' || mgr.email === 'N/A';
+
+                        if (isEditingManagerInfo) return null;
+
+                        if (isSystemManager) return null;
+
+                        if (isManager) {
+                          return (
+                            <button
+                              onClick={() => {
+                                setManagerFormData({ phone: mgr.phone === 'N/A' ? '' : mgr.phone, email: mgr.email === 'N/A' ? '' : mgr.email });
+                                setIsEditingManagerInfo(true);
+                              }}
+                              className="text-[10px] font-bold text-indigo-600 uppercase hover:underline"
+                            >
+                              Edit Info
+                            </button>
+                          );
+                        }
+
+                        if (isMissingInfo) {
+                          return (
+                            <button
+                              onClick={() => {
+                                setManagerFormData({ phone: mgr.phone === 'N/A' ? '' : mgr.phone, email: mgr.email === 'N/A' ? '' : mgr.email });
+                                setIsEditingManagerInfo(true);
+                              }}
+                              className="text-[10px] font-bold text-indigo-600 uppercase hover:underline"
+                            >
+                              Add Information
+                            </button>
+                          );
+                        }
+
+                        return null;
+                      })()}
+                    </div>
+
+                    {isEditingManagerInfo ? (
+                      <form onSubmit={handleManagerInfoUpdate} className="space-y-3">
+                        <div className="grid grid-cols-2 gap-3">
+                          <input
+                            type="text"
+                            placeholder="Phone Number"
+                            value={managerFormData.phone}
+                            onChange={(e) => setManagerFormData({ ...managerFormData, phone: e.target.value })}
+                            className="bg-white border-gray-200 rounded-lg py-2 px-3 text-xs w-full focus:ring-1 focus:ring-black"
+                          />
+                          <input
+                            type="email"
+                            placeholder="Email Address"
+                            value={managerFormData.email}
+                            onChange={(e) => setManagerFormData({ ...managerFormData, email: e.target.value })}
+                            className="bg-white border-gray-200 rounded-lg py-2 px-3 text-xs w-full focus:ring-1 focus:ring-black"
+                          />
+                        </div>
+                        <div className="flex gap-2">
+                          <button
+                            type="submit"
+                            className="flex-1 bg-black text-white py-2 rounded-lg text-xs font-bold hover:bg-gray-800"
+                          >
+                            Save
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setIsEditingManagerInfo(false)}
+                            className="flex-1 bg-gray-200 text-gray-700 py-2 rounded-lg text-xs font-bold hover:bg-gray-300"
+                          >
+                            Cancel
+                          </button>
+                        </div>
+                      </form>
+                    ) : (
+                      <>
+                        <p className="text-sm font-bold text-gray-800">{getWarehouseManagerSummary(viewingItem).name}</p>
+                        <p className="text-xs text-gray-500 mt-1">{getWarehouseManagerSummary(viewingItem).sourceMessage}</p>
+                        <div className="grid grid-cols-2 gap-4 mt-4">
+                          <div>
+                            <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest block mb-1">Phone</label>
+                            <p className="text-sm font-bold text-gray-800">{getWarehouseManagerSummary(viewingItem).phone}</p>
+                          </div>
+                          <div>
+                            <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest block mb-1">Email</label>
+                            <p className="text-sm font-bold text-gray-800">{getWarehouseManagerSummary(viewingItem).email}</p>
+                          </div>
+                        </div>
+                      </>
+                    )}
+                  </div>
+                )}
+
+                {collectionName === 'clients' && (
+                  <div className="space-y-4 pt-2">
+                    <div className="flex items-center justify-between rounded-2xl bg-gray-50 px-4 py-3">
                       <div>
-                        <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest block mb-1">Phone</label>
-                        <p className="text-sm font-bold text-gray-800">{getWarehouseManagerSummary(viewingItem).phone}</p>
+                        <p className="text-[10px] font-bold uppercase tracking-widest text-gray-400">Transfer History</p>
+                        <p className="mt-1 text-sm text-gray-600">
+                          Open the full client page to review all transfers and export them.
+                        </p>
                       </div>
+                      <button
+                        type="button"
+                        onClick={() => navigate(getDetailsRoute(viewingItem)!)}
+                        className="rounded-xl bg-black px-4 py-2 text-sm font-semibold text-white hover:bg-gray-800"
+                      >
+                        Open Transfers Page
+                      </button>
+                    </div>
+
+                    <div className="flex items-center justify-between rounded-2xl bg-gray-50 px-4 py-3">
                       <div>
-                        <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest block mb-1">Email</label>
-                        <p className="text-sm font-bold text-gray-800">{getWarehouseManagerSummary(viewingItem).email}</p>
+                        <p className="text-[10px] font-bold uppercase tracking-widest text-gray-400">Payments</p>
+                        <p className="mt-1 text-sm text-gray-600">
+                          Open the payment page to track what the client paid and what is still due.
+                        </p>
                       </div>
+                      <button
+                        type="button"
+                        onClick={() => navigate(`/clients/${viewingItem.id}/payments`)}
+                        className="rounded-xl bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-700"
+                      >
+                        Open Payments Page
+                      </button>
+                    </div>
+
+                    <div>
+                      <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest block mb-2">
+                        Client Transfers
+                      </label>
+                      {clientActivityForViewingItem.length > 0 ? (
+                        <div className="rounded-2xl border border-gray-100 overflow-hidden">
+                          <table className="w-full text-left text-sm">
+                            <thead className="bg-gray-50 text-gray-400 uppercase text-[10px] tracking-widest">
+                              <tr>
+                                <th className="px-4 py-3 font-bold">Invoice</th>
+                                <th className="px-4 py-3 font-bold">Date</th>
+                                <th className="px-4 py-3 font-bold">Warehouse</th>
+                                <th className="px-4 py-3 font-bold">Type</th>
+                                <th className="px-4 py-3 font-bold text-right">Qty</th>
+                                <th className="px-4 py-3 font-bold text-right">Total</th>
+                              </tr>
+                            </thead>
+                            <tbody className="divide-y divide-gray-100">
+                              {clientActivityForViewingItem.map((invoice: any) => (
+                                <tr key={invoice.id}>
+                                  <td className="px-4 py-3 font-semibold text-gray-800">
+                                    <div>{invoice.invoice_number || 'N/A'}</div>
+                                    <div className="text-xs text-gray-400">{invoice.status || 'N/A'}</div>
+                                  </td>
+                                  <td className="px-4 py-3 text-gray-500">
+                                    {invoice.created_at ? new Date(invoice.created_at).toLocaleString() : 'N/A'}
+                                  </td>
+                                  <td className="px-4 py-3 text-gray-600">{invoice.warehouseName || 'N/A'}</td>
+                                  <td className="px-4 py-3">
+                                    <span className={`inline-flex rounded-full px-2.5 py-1 text-xs font-bold ${
+                                      invoice.transferTypeLabel === 'sell'
+                                        ? 'bg-indigo-50 text-indigo-700'
+                                        : 'bg-emerald-50 text-emerald-700'
+                                    }`}>
+                                      {invoice.transferTypeLabel}
+                                    </span>
+                                  </td>
+                                  <td className="px-4 py-3 text-right font-semibold text-gray-700">
+                                    {invoice.totalQuantity}
+                                  </td>
+                                  <td className="px-4 py-3 text-right font-bold text-gray-800">
+                                    {typeof invoice.total_amount === 'number'
+                                      ? `$${invoice.total_amount.toLocaleString()}`
+                                      : 'N/A'}
+                                  </td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                      ) : (
+                        <p className="text-sm text-gray-500">No transfers recorded for this client yet.</p>
+                      )}
+                    </div>
+                  </div>
+                )}
+
+                {collectionName === 'suppliers' && (
+                  <div className="space-y-4 pt-2">
+                    <div className="flex items-center justify-between rounded-2xl bg-gray-50 px-4 py-3">
+                      <div>
+                        <p className="text-[10px] font-bold uppercase tracking-widest text-gray-400">Supplier Activity</p>
+                        <p className="mt-1 text-sm text-gray-600">
+                          Open the full supplier page to review movements and export them.
+                        </p>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => navigate(getDetailsRoute(viewingItem)!)}
+                        className="rounded-xl bg-black px-4 py-2 text-sm font-semibold text-white hover:bg-gray-800"
+                      >
+                        Open Transfers Page
+                      </button>
+                    </div>
+
+                    <div>
+                      <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest block mb-2">
+                        Recent Supplier Movements
+                      </label>
+                      {supplierActivityForViewingItem.length > 0 ? (
+                        <div className="rounded-2xl border border-gray-100 overflow-hidden">
+                          <table className="w-full text-left text-sm">
+                            <thead className="bg-gray-50 text-gray-400 uppercase text-[10px] tracking-widest">
+                              <tr>
+                                <th className="px-4 py-3 font-bold">Date</th>
+                                <th className="px-4 py-3 font-bold">Warehouse</th>
+                                <th className="px-4 py-3 font-bold">Type</th>
+                                <th className="px-4 py-3 font-bold">Item</th>
+                                <th className="px-4 py-3 font-bold text-right">Qty</th>
+                              </tr>
+                            </thead>
+                            <tbody className="divide-y divide-gray-100">
+                              {supplierActivityForViewingItem.map((movement: any) => (
+                                <tr key={movement.id}>
+                                  <td className="px-4 py-3 text-gray-500">
+                                    {movement.timestamp ? new Date(movement.timestamp).toLocaleString() : 'N/A'}
+                                  </td>
+                                  <td className="px-4 py-3 text-gray-600">{movement.warehouseName}</td>
+                                  <td className="px-4 py-3">
+                                    <span className="inline-flex rounded-full bg-indigo-50 px-2.5 py-1 text-xs font-bold text-indigo-700">
+                                      {movement.movement_type || 'N/A'}
+                                    </span>
+                                  </td>
+                                  <td className="px-4 py-3 text-gray-700">{movement.variantLabel}</td>
+                                  <td className="px-4 py-3 text-right font-semibold text-gray-800">{movement.quantity}</td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                      ) : (
+                        <p className="text-sm text-gray-500">No supplier activity recorded yet.</p>
+                      )}
                     </div>
                   </div>
                 )}

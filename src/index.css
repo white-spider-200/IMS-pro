@@ -1,1 +1,74 @@
 @import "tailwindcss";
+
+:root {
+  color-scheme: light;
+}
+
+@layer components {
+  .app-page {
+    @apply space-y-5;
+  }
+
+  .app-surface {
+    @apply rounded-2xl border border-gray-200 bg-white shadow-sm;
+  }
+
+  .app-muted-surface {
+    @apply rounded-xl border border-gray-200 bg-gray-50;
+  }
+
+  .app-title {
+    @apply text-2xl font-semibold tracking-tight text-gray-900;
+  }
+
+  .app-subtitle {
+    @apply text-sm text-gray-500;
+  }
+
+  .app-button-primary {
+    @apply inline-flex items-center justify-center gap-2 rounded-xl bg-black px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-gray-800;
+  }
+
+  .app-button-secondary {
+    @apply inline-flex items-center justify-center gap-2 rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm font-semibold text-gray-700 transition hover:bg-gray-50;
+  }
+
+  .app-button-muted {
+    @apply inline-flex items-center justify-center gap-2 rounded-xl bg-gray-100 px-4 py-2.5 text-sm font-semibold text-gray-700 transition hover:bg-gray-200;
+  }
+
+  .app-button-danger {
+    @apply inline-flex items-center justify-center gap-2 rounded-xl bg-red-50 px-4 py-2.5 text-sm font-semibold text-red-700 transition hover:bg-red-100;
+  }
+
+  .app-field {
+    @apply w-full rounded-xl border border-gray-200 bg-gray-50 px-4 py-3 text-sm font-medium text-gray-900 outline-none transition focus:border-gray-900 focus:bg-white;
+  }
+}
+
+html,
+body,
+#root {
+  min-height: 100%;
+}
+
+body {
+  margin: 0;
+  background: #f5f5f5;
+  color: #111827;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+@media (min-width: 1440px) {
+  html {
+    font-size: 14px;
+  }
+}
+
+@media (min-width: 1728px) {
+  html {
+    font-size: 13px;
+  }
+}

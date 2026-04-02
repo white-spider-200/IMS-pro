@@ -1,12 +1,12 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { db } from '../firebase';
 import { collection, onSnapshot, query, where, orderBy, limit, Timestamp } from 'firebase/firestore';
-import { 
-  BarChart3, 
-  Warehouse as WarehouseIcon, 
-  AlertTriangle, 
-  Clock, 
-  Activity, 
+import {
+  BarChart3,
+  Warehouse as WarehouseIcon,
+  AlertTriangle,
+  Clock,
+  Activity,
   ArrowRightLeft,
   ChevronRight,
   TrendingUp,
@@ -16,27 +16,29 @@ import {
   Plus
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { 
-  LineChart, 
-  Line, 
-  XAxis, 
-  YAxis, 
-  CartesianGrid, 
-  Tooltip, 
+import {
+  LineChart,
+  Line,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
   ResponsiveContainer,
   Legend
 } from 'recharts';
 import { toast } from 'sonner';
 import { cn } from '../lib/utils';
-import { 
-  Warehouse, 
-  ProductVariant, 
-  InventoryBalance, 
-  Reservation, 
+import {
+  Warehouse,
+  ProductVariant,
+  InventoryBalance,
+  Reservation,
   StockMovement,
   User
 } from '../types';
 import { seedBigData } from '../lib/seed';
+
+const SHOW_LOW_STOCK_UI = false;
 
 export default function ManagerDashboard() {
   const [warehouses, setWarehouses] = useState<Warehouse[]>([]);
@@ -114,11 +116,11 @@ export default function ManagerDashboard() {
         const v = variants.find(v => v.id === b.variant_id);
         return b.available_quantity < (v?.reorder_threshold || 10);
       }).length;
-      
+
       const health = wVariants > 0 ? Math.round(((wVariants - lowStockCount) / wVariants) * 100) : 100;
       const activeRes = reservations.filter(r => r.warehouse_id === w.id && r.status === 'active').length;
       const pendingQC = movements.filter(m => m.warehouse_id === w.id && m.status === 'pending_qc').length;
-      
+
       return {
         ...w,
         health,
@@ -138,7 +140,7 @@ export default function ManagerDashboard() {
     }).map(b => {
       const v = variants.find(v => v.id === b.variant_id);
       const w = warehouses.find(w => w.id === b.warehouse_id);
-      
+
       // Estimate daily movement
       const vMovements = movements.filter(m => m.variant_id === b.variant_id && m.warehouse_id === b.warehouse_id && m.movement_type === 'issue');
       const totalIssued = vMovements.reduce((acc, m) => acc + m.quantity, 0);
@@ -219,7 +221,7 @@ export default function ManagerDashboard() {
           <p className="text-gray-500 text-sm">Real-time health monitoring across all warehouses. Last updated: {new Date().toLocaleTimeString()}</p>
         </div>
         <div className="flex items-center gap-3">
-          <button 
+          <button
             onClick={handleBigSeed}
             className="bg-indigo-50 text-indigo-700 px-4 py-2 rounded-xl font-semibold hover:bg-indigo-100 transition-all text-sm flex items-center gap-2"
           >
@@ -254,7 +256,7 @@ export default function ManagerDashboard() {
                   <span className={cn(w.health > 80 ? "text-green-500" : "text-orange-500")}>{w.health}%</span>
                 </div>
                 <div className="h-2 bg-gray-100 rounded-full overflow-hidden">
-                  <motion.div 
+                  <motion.div
                     initial={{ width: 0 }}
                     animate={{ width: `${w.health}%` }}
                     className={cn("h-full rounded-full", w.health > 80 ? "bg-green-500" : "bg-orange-500")}
@@ -263,10 +265,6 @@ export default function ManagerDashboard() {
               </div>
 
               <div className="grid grid-cols-2 gap-4 pt-2">
-                <div className="space-y-1">
-                  <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest">Low Stock</p>
-                  <p className="text-lg font-black text-red-500">{w.lowStockCount}</p>
-                </div>
                 <div className="space-y-1">
                   <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest">Reservations</p>
                   <p className="text-lg font-black text-gray-800">{w.activeRes}</p>
@@ -283,7 +281,7 @@ export default function ManagerDashboard() {
             </div>
           </div>
         ))}
-        
+
         {/* Suppliers Summary Card for Manager */}
         <div className="bg-white rounded-3xl border border-gray-100 shadow-sm overflow-hidden hover:shadow-md transition-all p-6 flex flex-col justify-center">
           <div className="flex items-center gap-3 mb-4">
@@ -322,19 +320,19 @@ export default function ManagerDashboard() {
             <ResponsiveContainer width="100%" height="100%">
               <LineChart data={chartData}>
                 <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#F3F4F6" />
-                <XAxis 
-                  dataKey="date" 
-                  axisLine={false} 
-                  tickLine={false} 
+                <XAxis
+                  dataKey="date"
+                  axisLine={false}
+                  tickLine={false}
                   tick={{ fontSize: 10, fill: '#9CA3AF' }}
                   dy={10}
                 />
-                <YAxis 
-                  axisLine={false} 
-                  tickLine={false} 
+                <YAxis
+                  axisLine={false}
+                  tickLine={false}
                   tick={{ fontSize: 10, fill: '#9CA3AF' }}
                 />
-                <Tooltip 
+                <Tooltip
                   contentStyle={{ borderRadius: '16px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)' }}
                   labelStyle={{ fontWeight: 'bold', marginBottom: '4px' }}
                 />
@@ -380,54 +378,55 @@ export default function ManagerDashboard() {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-        {/* 2. Low Stock Alert Panel */}
-        <div className="bg-white rounded-3xl border border-gray-100 shadow-sm overflow-hidden">
-          <div className="p-6 border-b border-gray-100 flex items-center justify-between">
-            <h3 className="text-lg font-bold flex items-center gap-2">
-              <AlertTriangle className="w-5 h-5 text-red-500" />
-              Low Stock Alert Panel
-            </h3>
-            <span className="text-xs font-bold text-gray-400 uppercase tracking-widest">System Wide</span>
-          </div>
-          <div className="overflow-x-auto">
-            <table className="w-full text-left font-sans">
-              <thead>
-                <tr className="bg-gray-50 text-gray-400 text-[10px] uppercase tracking-widest font-bold">
-                  <th className="px-6 py-4">Warehouse</th>
-                  <th className="px-6 py-4">Variant</th>
-                  <th className="px-6 py-4">Qty / Threshold</th>
-                  <th className="px-6 py-4">Days to Stockout</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-50">
-                {lowStockAlerts.slice(0, 5).map((alert, idx) => (
-                  <tr key={idx} className="hover:bg-gray-50 transition-colors">
-                    <td className="px-6 py-4 text-xs font-bold text-gray-600">{alert.warehouse?.name}</td>
-                    <td className="px-6 py-4">
-                      <p className="text-sm font-bold">{alert.variant?.variant_code}</p>
-                    </td>
-                    <td className="px-6 py-4">
-                      <div className="flex items-center gap-2">
-                        <span className="text-sm font-black text-red-500">{alert.balance.available_quantity}</span>
-                        <span className="text-gray-300">/</span>
-                        <span className="text-sm text-gray-400">{alert.threshold}</span>
-                      </div>
-                    </td>
-                    <td className="px-6 py-4">
-                      <span className={cn(
-                        "text-xs font-bold px-2 py-1 rounded-lg",
-                        alert.daysUntilStockout < 3 ? "bg-red-100 text-red-600" : "bg-orange-100 text-orange-600"
-                      )}>
-                        {alert.daysUntilStockout === Infinity ? 'No movement' : `${alert.daysUntilStockout} days`}
-                      </span>
-                    </td>
+      <div className={`grid grid-cols-1 gap-8 ${SHOW_LOW_STOCK_UI ? 'lg:grid-cols-2' : ''}`}>
+        {SHOW_LOW_STOCK_UI && (
+          <div className="bg-white rounded-3xl border border-gray-100 shadow-sm overflow-hidden">
+            <div className="p-6 border-b border-gray-100 flex items-center justify-between">
+              <h3 className="text-lg font-bold flex items-center gap-2">
+                <AlertTriangle className="w-5 h-5 text-red-500" />
+                Low Stock Alert Panel
+              </h3>
+              <span className="text-xs font-bold text-gray-400 uppercase tracking-widest">System Wide</span>
+            </div>
+            <div className="overflow-x-auto">
+              <table className="w-full text-left font-sans">
+                <thead>
+                  <tr className="bg-gray-50 text-gray-400 text-[10px] uppercase tracking-widest font-bold">
+                    <th className="px-6 py-4">Warehouse</th>
+                    <th className="px-6 py-4">Variant</th>
+                    <th className="px-6 py-4">Qty / Threshold</th>
+                    <th className="px-6 py-4">Days to Stockout</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
+                </thead>
+                <tbody className="divide-y divide-gray-50">
+                  {lowStockAlerts.slice(0, 5).map((alert, idx) => (
+                    <tr key={idx} className="hover:bg-gray-50 transition-colors">
+                      <td className="px-6 py-4 text-xs font-bold text-gray-600">{alert.warehouse?.name}</td>
+                      <td className="px-6 py-4">
+                        <p className="text-sm font-bold">{alert.variant?.variant_code}</p>
+                      </td>
+                      <td className="px-6 py-4">
+                        <div className="flex items-center gap-2">
+                          <span className="text-sm font-black text-red-500">{alert.balance.available_quantity}</span>
+                          <span className="text-gray-300">/</span>
+                          <span className="text-sm text-gray-400">{alert.threshold}</span>
+                        </div>
+                      </td>
+                      <td className="px-6 py-4">
+                        <span className={cn(
+                          "text-xs font-bold px-2 py-1 rounded-lg",
+                          alert.daysUntilStockout < 3 ? "bg-red-100 text-red-600" : "bg-orange-100 text-orange-600"
+                        )}>
+                          {alert.daysUntilStockout === Infinity ? 'No movement' : `${alert.daysUntilStockout} days`}
+                        </span>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           </div>
-        </div>
+        )}
 
         {/* 5. Transfer Status */}
         <div className="bg-white rounded-3xl border border-gray-100 shadow-sm overflow-hidden">
@@ -445,13 +444,12 @@ export default function ManagerDashboard() {
                   <th className="px-6 py-4">Variant</th>
                   <th className="px-6 py-4">Qty</th>
                   <th className="px-6 py-4">Transit Time</th>
-                  <th className="px-6 py-4">Status</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-50">
                 {inTransitTransfers.length === 0 ? (
                   <tr>
-                    <td colSpan={4} className="px-6 py-12 text-center text-gray-400 italic">No transfers in transit</td>
+                    <td colSpan={3} className="px-6 py-12 text-center text-gray-400 italic">No transfers in transit</td>
                   </tr>
                 ) : inTransitTransfers.map((t, idx) => (
                   <tr key={idx} className="hover:bg-gray-50 transition-colors">
@@ -465,14 +463,6 @@ export default function ManagerDashboard() {
                         t.hoursInTransit > 24 ? "text-red-500" : "text-gray-600"
                       )}>
                         {t.hoursInTransit}h
-                      </span>
-                    </td>
-                    <td className="px-6 py-4">
-                      <span className={cn(
-                        "text-[10px] font-black uppercase tracking-widest px-2 py-0.5 rounded-full",
-                        t.hoursInTransit > 24 ? "bg-red-100 text-red-600" : "bg-purple-100 text-purple-600"
-                      )}>
-                        {t.hoursInTransit > 24 ? 'Delayed' : 'On Track'}
                       </span>
                     </td>
                   </tr>
@@ -518,8 +508,8 @@ export default function ManagerDashboard() {
                     <span className={cn(
                       "text-[10px] font-black uppercase tracking-widest px-2 py-0.5 rounded-full",
                       m.movement_type === 'receipt' ? "bg-green-100 text-green-600" :
-                      m.movement_type === 'issue' ? "bg-blue-100 text-blue-600" :
-                      "bg-gray-100 text-gray-600"
+                        m.movement_type === 'issue' ? "bg-blue-100 text-blue-600" :
+                          "bg-gray-100 text-gray-600"
                     )}>
                       {m.movement_type}
                     </span>

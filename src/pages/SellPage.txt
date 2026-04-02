@@ -1,0 +1,11 @@
+import React, { useState, useMemo } from 'react';
+import { useOutletContext } from 'react-router-dom';
+
+export default function SellPage() {
+  const { clients = [], products = [], variants = [], warehouses = [], suppliers = [], balances = [] } = useOutletContext<any>();
+  const [selectedClientId, setSelectedClientId] = useState('');
+  const [productSearch, setProductSearch] = useState('');
+  const [selectedProductId, setSelectedProductId] = useState('');
+  
+  return <div>Sell {clients.length}</div>;
+}

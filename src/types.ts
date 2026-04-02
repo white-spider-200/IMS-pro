@@ -154,7 +154,14 @@ export interface RevenueInvoice {
   customer_name: string;
   items: InvoiceItem[];
   total_amount: number;
-  status: 'paid' | 'pending' | 'cancelled';
+  subtotal?: number;
+  vat_rate?: number;
+  vat_amount?: number;
+  delivery_fee?: number;
+  cost_per_unit_at_sale?: number;
+  cogs_amount?: number;
+  gross_profit?: number;
+  status: 'paid' | 'partial' | 'pending' | 'cancelled';
   warehouse_id: string;
   movement_id?: string;
   created_at: string;
@@ -174,4 +181,25 @@ export interface ReceiptInvoice {
   total_amount: number;
   items: InvoiceItem[];
   created_at: string;
+}
+
+export interface WarehouseExpense {
+  id?: string;
+  title: string;
+  warehouse_id: string;
+  category?: string;
+  amount: number;
+  currency?: string;
+  recurrence: 'monthly' | 'one_time';
+  start_month?: string;
+  end_month?: string;
+  expense_date?: string;
+  payment_date?: string;
+  payment_method?: string;
+  receipt_number?: string;
+  notes?: string;
+  status?: 'pending' | 'paid';
+  created_at: string;
+  created_by?: string;
+  created_by_name?: string;
 }

@@ -5,6 +5,7 @@ import { History as HistoryIcon, ArrowUpRight, ArrowDownLeft, ArrowRightLeft, Al
 import { motion, AnimatePresence } from 'framer-motion';
 import { cn } from '../lib/utils';
 import { toast } from 'sonner';
+import { useOutletContext } from 'react-router-dom';
 
 export default function StockMovementHistory() {
   const [movements, setMovements] = useState<any[]>([]);
@@ -18,18 +19,40 @@ export default function StockMovementHistory() {
   const [dateTo, setDateTo] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
   const [rowsPerPage, setRowsPerPage] = useState(25);
-  
+
   const [selectedMovement, setSelectedMovement] = useState<any>(null);
   const [isMovementModalOpen, setIsMovementModalOpen] = useState(false);
   const [selectedSupplier, setSelectedSupplier] = useState<any>(null);
   const [isSupplierModalOpen, setIsSupplierModalOpen] = useState(false);
-  
+
   const [selectedItemDetails, setSelectedItemDetails] = useState<any>(null);
   const [isItemDetailsModalOpen, setIsItemDetailsModalOpen] = useState(false);
   const [historyDateFrom, setHistoryDateFrom] = useState('');
   const [historyDateTo, setHistoryDateTo] = useState('');
 
+  const outletContext = useOutletContext<any>() || {};
+  const {
+    isDemoMode,
+    movements: ctxMovements = [],
+    variants: ctxVariants = [],
+    products: ctxProducts = [],
+    warehouses: ctxWarehouses = [],
+    suppliers: ctxSuppliers = [],
+    balances: ctxBalances = []
+  } = outletContext;
+
   useEffect(() => {
+    if (isDemoMode) {
+      setMovements(ctxMovements);
+      setVariants(ctxVariants);
+      setProducts(ctxProducts);
+      setWarehouses(ctxWarehouses);
+      setSuppliers(ctxSuppliers);
+      setBalances(ctxBalances);
+      setLoading(false);
+      return;
+    }
+
     const handleError = (error: any) => {
       console.error('Firestore snapshot error:', error);
       toast.error('Failed to sync movement history');
@@ -62,15 +85,15 @@ export default function StockMovementHistory() {
       setBalances(s.docs.map(d => ({ id: d.id, ...d.data() })));
     }, handleError);
 
-    return () => { 
-      unsubMovements(); 
-      unsubVariants(); 
+    return () => {
+      unsubMovements();
+      unsubVariants();
       unsubProducts();
-      unsubWarehouses(); 
+      unsubWarehouses();
       unsubSuppliers();
       unsubBalances();
     };
-  }, []);
+  }, [isDemoMode, ctxMovements, ctxVariants, ctxProducts, ctxWarehouses, ctxSuppliers, ctxBalances]);
 
   const getVariantName = (id: string) => {
     const v = variants.find(v => v.id === id);
@@ -170,8 +193,8 @@ export default function StockMovementHistory() {
         <div className="flex items-center gap-3 bg-white p-2 rounded-2xl border border-gray-100 shadow-sm">
           <div className="flex flex-col px-2">
             <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">From</label>
-            <input 
-              type="datetime-local" 
+            <input
+              type="datetime-local"
               value={dateFrom}
               onChange={(e) => setDateFrom(e.target.value)}
               className="text-xs font-bold outline-none bg-transparent"
@@ -180,15 +203,15 @@ export default function StockMovementHistory() {
           <div className="w-px h-8 bg-gray-100" />
           <div className="flex flex-col px-2">
             <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">To</label>
-            <input 
-              type="datetime-local" 
+            <input
+              type="datetime-local"
               value={dateTo}
               onChange={(e) => setDateTo(e.target.value)}
               className="text-xs font-bold outline-none bg-transparent"
             />
           </div>
           {(dateFrom || dateTo) && (
-            <button 
+            <button
               onClick={() => { setDateFrom(''); setDateTo(''); }}
               className="p-2 hover:bg-gray-50 rounded-xl text-gray-400 hover:text-gray-600 transition-colors"
             >
@@ -238,7 +261,7 @@ export default function StockMovementHistory() {
               ) : paginatedMovements.map((item) => (
                 <tr key={item.id} className="hover:bg-gray-50 transition-colors">
                   <td className="px-6 py-4">
-                    <button 
+                    <button
                       onClick={() => handleMovementClick(item)}
                       className="text-xs font-mono text-indigo-500 hover:text-indigo-700 hover:underline cursor-pointer"
                     >
@@ -277,7 +300,7 @@ export default function StockMovementHistory() {
                     </div>
                   </td>
                   <td className="px-6 py-4">
-                    <button 
+                    <button
                       onClick={() => handleWarehouseClick(item.variant_id, item.warehouse_id)}
                       className="text-sm text-indigo-500 hover:text-indigo-700 hover:underline cursor-pointer"
                     >
@@ -461,8 +484,8 @@ export default function StockMovementHistory() {
                   <div className="flex items-center gap-2 bg-gray-50 p-1.5 rounded-xl border border-gray-100">
                     <div className="flex flex-col px-2">
                       <label className="text-[8px] font-bold text-gray-400 uppercase tracking-widest">From</label>
-                      <input 
-                        type="datetime-local" 
+                      <input
+                        type="datetime-local"
                         value={historyDateFrom}
                         onChange={(e) => setHistoryDateFrom(e.target.value)}
                         className="text-[10px] font-bold outline-none bg-transparent"
@@ -471,15 +494,15 @@ export default function StockMovementHistory() {
                     <div className="w-px h-6 bg-gray-200" />
                     <div className="flex flex-col px-2">
                       <label className="text-[8px] font-bold text-gray-400 uppercase tracking-widest">To</label>
-                      <input 
-                        type="datetime-local" 
+                      <input
+                        type="datetime-local"
                         value={historyDateTo}
                         onChange={(e) => setHistoryDateTo(e.target.value)}
                         className="text-[10px] font-bold outline-none bg-transparent"
                       />
                     </div>
                     {(historyDateFrom || historyDateTo) && (
-                      <button 
+                      <button
                         onClick={() => { setHistoryDateFrom(''); setHistoryDateTo(''); }}
                         className="p-1 hover:bg-gray-200 rounded-lg text-gray-400 transition-colors"
                       >
@@ -518,26 +541,26 @@ export default function StockMovementHistory() {
                           return timestamp >= from && timestamp <= to;
                         })
                         .map((m: any, idx: number) => (
-                        <tr key={idx} className="text-sm hover:bg-gray-50 transition-colors">
-                          <td className="px-6 py-4">
-                            <span className={cn(
-                              "px-2 py-0.5 rounded-md text-[10px] font-bold uppercase",
-                              ['issue', 'transfer_out'].includes(m.movement_type) ? "bg-red-50 text-red-600" : "bg-green-50 text-green-600"
-                            )}>
-                              {m.movement_type.replace('_', ' ')}
-                            </span>
-                          </td>
-                          <td className={`px-6 py-4 text-right font-bold ${['issue', 'transfer_out'].includes(m.movement_type) ? 'text-red-600' : 'text-green-600'}`}>
-                            {['issue', 'transfer_out'].includes(m.movement_type) ? '-' : '+'}{m.quantity}
-                          </td>
-                          <td className="px-6 py-4 text-gray-500 text-xs">
-                            {formatDateTime(m.timestamp)}
-                          </td>
-                          <td className="px-6 py-4 text-gray-400 text-xs truncate max-w-[200px]">
-                            {m.notes || '-'}
-                          </td>
-                        </tr>
-                      ))}
+                          <tr key={idx} className="text-sm hover:bg-gray-50 transition-colors">
+                            <td className="px-6 py-4">
+                              <span className={cn(
+                                "px-2 py-0.5 rounded-md text-[10px] font-bold uppercase",
+                                ['issue', 'transfer_out'].includes(m.movement_type) ? "bg-red-50 text-red-600" : "bg-green-50 text-green-600"
+                              )}>
+                                {m.movement_type.replace('_', ' ')}
+                              </span>
+                            </td>
+                            <td className={`px-6 py-4 text-right font-bold ${['issue', 'transfer_out'].includes(m.movement_type) ? 'text-red-600' : 'text-green-600'}`}>
+                              {['issue', 'transfer_out'].includes(m.movement_type) ? '-' : '+'}{m.quantity}
+                            </td>
+                            <td className="px-6 py-4 text-gray-500 text-xs">
+                              {formatDateTime(m.timestamp)}
+                            </td>
+                            <td className="px-6 py-4 text-gray-400 text-xs truncate max-w-[200px]">
+                              {m.notes || '-'}
+                            </td>
+                          </tr>
+                        ))}
                     </tbody>
                   </table>
                 </div>

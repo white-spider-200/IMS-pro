@@ -1,8 +1,9 @@
 import { db } from '../firebase';
-import { collection, addDoc, deleteDoc, getDocs, query, limit, where, updateDoc } from 'firebase/firestore';
+import { collection, addDoc, deleteDoc, doc, getDocs, query, limit, where, updateDoc } from 'firebase/firestore';
 
 const BUSINESS_COLLECTIONS = [
   'warehouses',
+  'users',
   'suppliers',
   'brands',
   'categories',
@@ -14,7 +15,15 @@ const BUSINESS_COLLECTIONS = [
   'backorders',
   'reservations',
   'revenue_invoices',
+  'purchase_invoices',
+  'return_invoices',
+  'client_payments',
+  'warehouse_expenses',
   'receipt_invoices',
+  'transfer_invoices',
+  'transfers',
+  'inventory_update_records',
+  'supplier_product_relations',
   'clients',
 ];
 
@@ -60,17 +69,27 @@ export async function seedInitialData() {
     manager_name: 'Hans Visser',
     manager_email: 'hans@example.com'
   });
+  const w4 = await addDoc(collection(db, 'warehouses'), {
+    name: 'Global Nexus',
+    location: 'Jurong East',
+    country: 'Singapore',
+    status: 'active',
+    manager_name: 'Tan Ah Kow',
+    manager_email: 'tak@globalnexus.sg'
+  });
 
   // 1.1 Users (Managers & Staff)
   const u1 = await addDoc(collection(db, 'users'), { email: 'manager1@example.com', displayName: 'John Manager', role: 'manager', warehouse_ids: [w1.id], created_at: new Date().toISOString() });
   const u2 = await addDoc(collection(db, 'users'), { email: 'manager2@example.com', displayName: 'Sarah Supervisor', role: 'manager', warehouse_ids: [w2.id], created_at: new Date().toISOString() });
   const u3 = await addDoc(collection(db, 'users'), { email: 'hans@example.com', displayName: 'Hans Visser', role: 'manager', warehouse_ids: [w3.id], created_at: new Date().toISOString() });
+  const u4 = await addDoc(collection(db, 'users'), { email: 'tak@globalnexus.sg', displayName: 'Tan Ah Kow', role: 'manager', warehouse_ids: [w4.id], created_at: new Date().toISOString() });
   await addDoc(collection(db, 'users'), { email: 'admin@example.com', displayName: 'System Admin', role: 'admin', created_at: new Date().toISOString() });
 
   // Update warehouses with manager_id
   await updateDoc(w1, { manager_id: u1.id });
   await updateDoc(w2, { manager_id: u2.id });
   await updateDoc(w3, { manager_id: u3.id });
+  await updateDoc(w4, { manager_id: u4.id });
 
   // 2. Suppliers
   const s1 = await addDoc(collection(db, 'suppliers'), { name: 'Global Tech Industries', contact_info: 'sales@globaltech.com', country: 'USA', status: 'active', lead_time_days: 14 });
@@ -81,16 +100,18 @@ export async function seedInitialData() {
   const b1 = await addDoc(collection(db, 'brands'), { name: 'TechPro', country_of_origin: 'USA', status: 'active' });
   const b2 = await addDoc(collection(db, 'brands'), { name: 'EcoFlow', country_of_origin: 'Germany', status: 'active' });
   const b3 = await addDoc(collection(db, 'brands'), { name: 'Zenith', country_of_origin: 'Japan', status: 'active' });
+  const b4 = await addDoc(collection(db, 'brands'), { name: 'Nexus', country_of_origin: 'Singapore', status: 'active' });
 
   // 4. Categories
   const c1 = await addDoc(collection(db, 'categories'), { name: 'Electronics' });
   const c2 = await addDoc(collection(db, 'categories'), { name: 'Computing', parent_category_id: c1.id });
   const c3 = await addDoc(collection(db, 'categories'), { name: 'Peripherals', parent_category_id: c1.id });
   const c4 = await addDoc(collection(db, 'categories'), { name: 'Networking', parent_category_id: c1.id });
+  const c5 = await addDoc(collection(db, 'categories'), { name: 'Mobile', parent_category_id: c1.id });
 
   // 4.5 Clients
-  const cl1 = await addDoc(collection(db, 'clients'), { client_code: 'CLI-001', name: 'Global Solutions Inc', email: 'purchasing@globalsolutions.com', phone: '555-0101', location: 'New York, USA', status: 'active' });
-  const cl2 = await addDoc(collection(db, 'clients'), { client_code: 'CLI-002', name: 'Creative Agency Ltd', email: 'orders@creativeagency.co.uk', phone: '555-0202', location: 'London, UK', status: 'active' });
+  const cl1 = await addDoc(collection(db, 'clients'), { client_code: 'CLI-001', name: 'Global Solutions Inc', email: 'purchasing@globalsolutions.com', phone: '555-0101', location: 'New York, USA', status: 'active', total_billed: 0, paid_amount: 0, pending_amount: 0, balance_due: 0, credit_balance: 0, balance: 0 });
+  const cl2 = await addDoc(collection(db, 'clients'), { client_code: 'CLI-002', name: 'Creative Agency Ltd', email: 'orders@creativeagency.co.uk', phone: '555-0202', location: 'London, UK', status: 'active', total_billed: 0, paid_amount: 0, pending_amount: 0, balance_due: 0, credit_balance: 0, balance: 0 });
 
   // 5. Products
   const p1 = await addDoc(collection(db, 'products'), {
@@ -121,6 +142,16 @@ export async function seedInitialData() {
     supplier_id: s3.id,
     status: 'active',
     description: 'Next-gen WiFi 6 high-speed router'
+  });
+
+  const p4 = await addDoc(collection(db, 'products'), {
+    name: 'Nexus One Smartphone',
+    sku: 'NX-ONE-S',
+    brand_id: b4.id,
+    category_id: c5.id,
+    supplier_id: s1.id,
+    status: 'active',
+    description: 'Flagship smartphone with advanced AI features'
   });
 
   // 6. Variants
@@ -173,6 +204,18 @@ export async function seedInitialData() {
     status: 'active'
   });
 
+  const v5 = await addDoc(collection(db, 'product_variants'), {
+    product_id: p4.id,
+    variant_code: 'NX-ONE-BLACK',
+    barcode: '5060708090123',
+    color: 'Phantom Black',
+    size: '6.7 inch',
+    reorder_threshold: 30,
+    unit_cost: 600,
+    unit_price: 999,
+    status: 'active'
+  });
+
   // 7. Initial Balances & Movements
   const initialStock = [
     { variant: v1.id, warehouse: w1.id, qty: 45 },
@@ -180,7 +223,8 @@ export async function seedInitialData() {
     { variant: v2.id, warehouse: w1.id, qty: 30 },
     { variant: v3.id, warehouse: w1.id, qty: 120 },
     { variant: v3.id, warehouse: w2.id, qty: 8 },
-    { variant: v4.id, warehouse: w3.id, qty: 25 }
+    { variant: v4.id, warehouse: w3.id, qty: 25 },
+    { variant: v5.id, warehouse: w4.id, qty: 25 }
   ];
 
   for (const stock of initialStock) {
@@ -326,11 +370,31 @@ export async function seedInitialData() {
     created_at: new Date().toISOString()
   });
 
+  await updateDoc(cl1, {
+    total_billed: 18000,
+    paid_amount: 18000,
+    pending_amount: 0,
+    balance_due: 0,
+    credit_balance: 0,
+    balance: 0,
+  });
+  await updateDoc(cl2, {
+    total_billed: 2225,
+    paid_amount: 0,
+    pending_amount: 2225,
+    balance_due: 2225,
+    credit_balance: 0,
+    balance: -2225,
+  });
+
   console.log('Seeding complete!');
 }
 
+const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
+
 export async function seedBigData() {
   console.log('Seeding curated big data batch...');
+  // ... (rest of the function remains similar but I will add small delays)
 
   const warehouses = [
     { name: 'Midwest Hub', location: 'Chicago, Illinois', country: 'USA', manual_manager_name: 'Mia Alvarez', manual_manager_phone: '+1 312 555 0137', manual_manager_email: 'mia.alvarez@midwesthub.example' },
@@ -361,6 +425,7 @@ export async function seedBigData() {
     { name: 'Displays' },
     { name: 'Networking' },
     { name: 'Accessories' },
+    { name: 'Smart Home' },
   ];
 
   const clients = [
@@ -449,6 +514,43 @@ export async function seedBigData() {
         { variant_code: 'AET-KEY-NVY', barcode: '66063500692', color: 'Navy', size: '75%', reorder_threshold: 18, unit_cost: 52, unit_price: 95, photo_url: 'https://images.unsplash.com/photo-1541140532154-b024d705b90a?auto=format&fit=crop&q=80&w=500' },
       ],
     },
+    {
+      name: 'Aether Smart Bulb',
+      sku: 'AET-BULB-RGB',
+      brand: 'Aether',
+      category: 'Smart Home',
+      supplier: 'Aura Electronics',
+      description: 'Wi-Fi enabled multi-color LED smart bulb with voice control support.',
+      image_url: 'https://images.unsplash.com/photo-1550524514-963d08130575?auto=format&fit=crop&q=80&w=500',
+      variants: [
+        { variant_code: 'AET-BLB-RGB', barcode: '77063500691', color: 'RGB', size: 'Standard', reorder_threshold: 30, unit_cost: 12, unit_price: 24, photo_url: 'https://images.unsplash.com/photo-1550524514-963d08130575?auto=format&fit=crop&q=80&w=500' },
+        { variant_code: 'AET-BLB-WHT', barcode: '77063500692', color: 'Warm White', size: 'Standard', reorder_threshold: 25, unit_cost: 8, unit_price: 16, photo_url: 'https://images.unsplash.com/photo-1558227691-41ea78d1f631?auto=format&fit=crop&q=80&w=500' },
+      ],
+    },
+    {
+      name: 'Zenith Smart Plug',
+      sku: 'ZNT-PLUG-X',
+      brand: 'Zenith',
+      category: 'Smart Home',
+      supplier: 'Titan Hardware',
+      description: 'Energy-monitoring smart plug with scheduling and overload protection.',
+      image_url: 'https://images.unsplash.com/photo-1558489080-fac38afeb9e4?auto=format&fit=crop&q=80&w=500',
+      variants: [
+        { variant_code: 'ZNT-PLG-SINGLE', barcode: '88063500691', color: 'White', size: '1-pack', reorder_threshold: 40, unit_cost: 15, unit_price: 29, photo_url: 'https://images.unsplash.com/photo-1558489080-fac38afeb9e4?auto=format&fit=crop&q=80&w=500' },
+      ],
+    },
+    {
+      name: 'Gaia Security Camera',
+      sku: 'GAI-CAM-360',
+      brand: 'Gaia',
+      category: 'Smart Home',
+      supplier: 'Quantum Components',
+      description: '360-degree indoor security camera with night vision and motion alerts.',
+      image_url: 'https://images.unsplash.com/photo-1557324232-b8917d3c3dcb?auto=format&fit=crop&q=80&w=500',
+      variants: [
+        { variant_code: 'GAI-CAM-360', barcode: '99063500691', color: 'Black', size: '360 View', reorder_threshold: 12, unit_cost: 45, unit_price: 79, photo_url: 'https://images.unsplash.com/photo-1557324232-b8917d3c3dcb?auto=format&fit=crop&q=80&w=500' },
+      ],
+    },
   ];
 
   const warehouseRefs: Record<string, string> = {};
@@ -459,6 +561,7 @@ export async function seedBigData() {
       created_at: new Date().toISOString(),
       last_modified: new Date().toISOString(),
     });
+    await delay(50);
     warehouseRefs[warehouse.name] = document.id;
   }
 
@@ -471,6 +574,7 @@ export async function seedBigData() {
       created_at: new Date().toISOString(),
       last_modified: new Date().toISOString(),
     });
+    await delay(50);
     supplierRefs[supplier.name] = document.id;
   }
 
@@ -481,6 +585,7 @@ export async function seedBigData() {
       created_at: new Date().toISOString(),
       last_modified: new Date().toISOString(),
     });
+    await delay(50);
     brandRefs[brand.name] = document.id;
   }
 
@@ -491,6 +596,7 @@ export async function seedBigData() {
       created_at: new Date().toISOString(),
       last_modified: new Date().toISOString(),
     });
+    await delay(50);
     categoryRefs[category.name] = document.id;
   }
 
@@ -498,9 +604,16 @@ export async function seedBigData() {
   for (const client of clients) {
     const document = await addDoc(collection(db, 'clients'), {
       ...client,
+      total_billed: 0,
+      paid_amount: 0,
+      pending_amount: 0,
+      balance_due: 0,
+      credit_balance: 0,
+      balance: 0,
       created_at: new Date().toISOString(),
       last_modified: new Date().toISOString(),
     });
+    await delay(50);
     clientRefs.push(document.id);
   }
 
@@ -522,6 +635,8 @@ export async function seedBigData() {
       last_modified: new Date().toISOString(),
     });
 
+    await delay(50);
+
     for (let variantIndex = 0; variantIndex < product.variants.length; variantIndex += 1) {
       const variant = product.variants[variantIndex];
       const variantDocument = await addDoc(collection(db, 'product_variants'), {
@@ -532,6 +647,7 @@ export async function seedBigData() {
         created_at: new Date().toISOString(),
         last_modified: new Date().toISOString(),
       });
+      await delay(50);
 
       variantRefs.push({ id: variantDocument.id, productName: product.name, supplierId: supplierRefs[product.supplier] });
 
@@ -578,6 +694,7 @@ export async function seedBigData() {
       expected_delivery_date: new Date(Date.now() + (index + 2) * 24 * 60 * 60 * 1000).toISOString(),
       created_at: new Date(Date.now() - index * 12 * 60 * 60 * 1000).toISOString(),
     });
+    await delay(50);
   }
 
   for (let index = 0; index < 4; index += 1) {
@@ -590,6 +707,7 @@ export async function seedBigData() {
       status: 'pending',
       created_at: new Date(Date.now() - index * 24 * 60 * 60 * 1000).toISOString(),
     });
+    await delay(50);
   }
 
   for (let index = 0; index < 5; index += 1) {
@@ -603,6 +721,7 @@ export async function seedBigData() {
       status: 'active',
       created_at: new Date().toISOString(),
     });
+    await delay(50);
   }
 
   for (let index = 0; index < 6; index += 1) {
@@ -619,6 +738,34 @@ export async function seedBigData() {
       warehouse_id: warehouseCycle[index % warehouseCycle.length],
       created_at: new Date(Date.now() - index * 48 * 60 * 60 * 1000).toISOString(),
     });
+    await delay(50);
+  }
+
+  for (let index = 0; index < clientRefs.length; index += 1) {
+    const matchedInvoices = Array.from({ length: 6 }, (_, invoiceIndex) => invoiceIndex)
+      .filter((invoiceIndex) => invoiceIndex % clientRefs.length === index)
+      .map((invoiceIndex) => {
+        const quantity = 3 + invoiceIndex;
+        const unitPrice = 120 + invoiceIndex * 25;
+        const total = quantity * unitPrice;
+        const status = invoiceIndex % 2 === 0 ? 'paid' : 'pending';
+        return { total, status };
+      });
+
+    const totalBilled = matchedInvoices.reduce((sum, invoice) => sum + invoice.total, 0);
+    const paidAmount = matchedInvoices.filter((invoice) => invoice.status === 'paid').reduce((sum, invoice) => sum + invoice.total, 0);
+    const pendingAmount = matchedInvoices.filter((invoice) => invoice.status === 'pending').reduce((sum, invoice) => sum + invoice.total, 0);
+
+    await updateDoc(doc(db, 'clients', clientRefs[index]), {
+      total_billed: totalBilled,
+      paid_amount: paidAmount,
+      pending_amount: pendingAmount,
+      balance_due: pendingAmount,
+      credit_balance: 0,
+      balance: paidAmount - totalBilled,
+      last_modified: new Date().toISOString(),
+    });
+    await delay(50);
   }
 
   console.log('Curated big data seeding complete!');
