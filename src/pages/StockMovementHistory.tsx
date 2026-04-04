@@ -102,6 +102,18 @@ export default function StockMovementHistory() {
     return p ? `${p.name} - ${v.variant_code}` : v.variant_code;
   };
 
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        setIsMovementModalOpen(false);
+        setIsSupplierModalOpen(false);
+        setIsItemDetailsModalOpen(false);
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, []);
+
   const getWarehouseName = (id: string) => {
     return warehouses.find(w => w.id === id)?.name || id;
   };
@@ -190,24 +202,24 @@ export default function StockMovementHistory() {
           <h1 className="text-2xl font-bold tracking-tight">Stock Movements</h1>
           <p className="text-gray-500 text-sm">Full audit trail of all inventory changes.</p>
         </div>
-        <div className="flex items-center gap-3 bg-white p-2 rounded-2xl border border-gray-100 shadow-sm">
-          <div className="flex flex-col px-2">
-            <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">From</label>
+        <div className="flex items-center flex-wrap gap-3 bg-white p-2 rounded-2xl border border-gray-100 shadow-sm">
+          <div className="flex flex-col px-3 py-1 hover:bg-gray-50 rounded-lg transition-colors cursor-pointer">
+            <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest cursor-pointer">From</label>
             <input
               type="datetime-local"
               value={dateFrom}
               onChange={(e) => setDateFrom(e.target.value)}
-              className="text-xs font-bold outline-none bg-transparent"
+              className="text-xs font-bold font-mono text-gray-700 outline-none bg-transparent cursor-pointer"
             />
           </div>
           <div className="w-px h-8 bg-gray-100" />
-          <div className="flex flex-col px-2">
-            <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">To</label>
+          <div className="flex flex-col px-3 py-1 hover:bg-gray-50 rounded-lg transition-colors cursor-pointer">
+            <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest cursor-pointer">To</label>
             <input
               type="datetime-local"
               value={dateTo}
               onChange={(e) => setDateTo(e.target.value)}
-              className="text-xs font-bold outline-none bg-transparent"
+              className="text-xs font-bold font-mono text-gray-700 outline-none bg-transparent cursor-pointer"
             />
           </div>
           {(dateFrom || dateTo) && (
@@ -236,8 +248,8 @@ export default function StockMovementHistory() {
       </div>
 
       <div className="bg-white rounded-3xl shadow-sm border border-gray-100 overflow-hidden">
-        <div className="max-h-[70vh] overflow-auto overscroll-contain">
-          <table className="w-full text-left">
+        <div className="max-h-[70vh] overflow-x-auto overscroll-contain">
+          <table className="w-full text-left min-w-[800px]">
             <thead className="sticky top-0 z-10 bg-white">
               <tr className="bg-gray-50 text-gray-500 text-xs uppercase tracking-wider">
                 <th className="px-6 py-4 font-semibold">ID</th>

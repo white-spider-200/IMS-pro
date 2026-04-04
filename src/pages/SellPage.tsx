@@ -14,6 +14,8 @@ import {
   DollarSign,
   Hash,
   ChevronDown,
+  Receipt,
+  Wallet,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import InventoryService from '../services/inventoryService';
@@ -33,7 +35,6 @@ type SellPageContext = {
 };
 
 const VAT_OPTIONS = ['0', '5', '10', '16'];
-
 function FieldGroup({ label, icon: Icon, children }: { label: string; icon: React.ElementType; children: React.ReactNode }) {
   return (
     <div className="space-y-2">
@@ -76,6 +77,9 @@ export default function SellPage() {
   const [unitPrice, setUnitPrice] = useState('');
   const [vatRate, setVatRate] = useState('0');
   const [notes, setNotes] = useState('');
+  const [recordPaymentNow, setRecordPaymentNow] = useState(false);
+  const [paymentAmount, setPaymentAmount] = useState('');
+  const [paymentNotes, setPaymentNotes] = useState('');
   const [isProcessing, setIsProcessing] = useState(false);
   const [transactionTime, setTransactionTime] = useState(() => new Date().toISOString());
   const [isSummaryOpen, setIsSummaryOpen] = useState(true);
@@ -153,6 +157,7 @@ export default function SellPage() {
   const numericQuantity = Number(quantity);
   const numericUnitPrice = Number(unitPrice);
   const numericVatRate = Number(vatRate || 0);
+  const numericPaymentAmount = Number(paymentAmount || 0);
   const subtotal = Number.isFinite(numericQuantity) && Number.isFinite(numericUnitPrice) ? numericQuantity * numericUnitPrice : 0;
   const vatAmount = subtotal * (numericVatRate / 100);
   const totalAmount = subtotal + vatAmount;
@@ -185,6 +190,11 @@ export default function SellPage() {
     if (numericQuantity > availableQuantity) errors.push('Not enough stock in the selected warehouse.');
     if (!Number.isFinite(numericUnitPrice) || numericUnitPrice < 0) errors.push('Sell price must be zero or greater.');
     if (!Number.isFinite(numericVatRate) || numericVatRate < 0) errors.push('VAT must be valid.');
+    if (numericVatRate > 100) errors.push('VAT cannot exceed 100%.');
+    if (recordPaymentNow) {
+      if (!Number.isFinite(numericPaymentAmount) || numericPaymentAmount <= 0) errors.push('Payment amount must be greater than zero.');
+      if (numericPaymentAmount > totalAmount) errors.push('Payment amount cannot exceed total amount.');
+    }
     return Array.from(new Set(errors));
   }, [
     activeVariant,
@@ -192,6 +202,10 @@ export default function SellPage() {
     numericQuantity,
     numericUnitPrice,
     numericVatRate,
+    numericPaymentAmount,
+    recordPaymentNow,
+    subtotal,
+    totalAmount,
     selectedClientId,
     selectedProductId,
     selectedVariantId,
@@ -208,6 +222,9 @@ export default function SellPage() {
     setUnitPrice('');
     setVatRate('0');
     setNotes('');
+    setRecordPaymentNow(false);
+    setPaymentAmount('');
+    setPaymentNotes('');
     setTransactionTime(new Date().toISOString());
   };
 
@@ -232,6 +249,8 @@ export default function SellPage() {
           {
             vatRate: numericVatRate,
             notes: notes || `Sold stock to ${selectedClient.name}`,
+            paymentAmount: recordPaymentNow ? numericPaymentAmount : 0,
+            paymentNotes,
             transactionTime,
           }
         );
@@ -247,6 +266,8 @@ export default function SellPage() {
             unitPrice: numericUnitPrice,
             vatRate: numericVatRate,
             notes: notes || `Sold stock to ${selectedClient.name}`,
+            paymentAmount: recordPaymentNow ? numericPaymentAmount : 0,
+            paymentNotes,
             transactionTime,
           }
         );
@@ -435,6 +456,56 @@ export default function SellPage() {
             </FieldGroup>
           </div>
 
+          <div className="rounded-2xl border border-slate-100 bg-white p-6 shadow-sm">
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <h2 className="text-sm font-bold uppercase tracking-widest text-slate-600">Down Payment</h2>
+                <p className="mt-1 text-sm text-slate-500">Optional. If you leave this off, the full invoice goes to Aged Receivable. If you enter part of the amount, only the remaining balance goes there.</p>
+              </div>
+              <label className="inline-flex items-center gap-2 text-sm font-semibold text-slate-700">
+                <input
+                  type="checkbox"
+                  checked={recordPaymentNow}
+                  onChange={(e) => {
+                    const checked = e.target.checked;
+                    setRecordPaymentNow(checked);
+                    if (!checked) {
+                      setPaymentAmount('');
+                      setPaymentNotes('');
+                    }
+                  }}
+                  className="h-4 w-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500"
+                />
+                Add down payment
+              </label>
+            </div>
+
+            {recordPaymentNow && (
+              <div className="mt-4 grid gap-4 sm:grid-cols-2">
+                <FieldGroup label="Down payment amount" icon={Wallet}>
+                  <input
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    value={paymentAmount}
+                    onChange={(e) => setPaymentAmount(e.target.value)}
+                    className={inputCls}
+                    placeholder="0.00"
+                  />
+                </FieldGroup>
+                <FieldGroup label="Payment note" icon={Receipt}>
+                  <input
+                    type="text"
+                    value={paymentNotes}
+                    onChange={(e) => setPaymentNotes(e.target.value)}
+                    className={inputCls}
+                    placeholder="Cash, bank transfer, receipt note..."
+                  />
+                </FieldGroup>
+              </div>
+            )}
+          </div>
+
           {validationErrors.length > 0 && (
             <div className="flex items-start gap-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3">
               <AlertCircle className="mt-0.5 h-4 w-4 flex-shrink-0 text-amber-600" />
@@ -552,6 +623,7 @@ export default function SellPage() {
                 <SummaryRow label="Unit price" value={`$${numericUnitPrice.toFixed(2)}`} />
                 <SummaryRow label="Subtotal" value={`$${subtotal.toFixed(2)}`} />
                 <SummaryRow label="VAT" value={`$${vatAmount.toFixed(2)}`} />
+                <SummaryRow label="Down payment" value={recordPaymentNow ? `$${numericPaymentAmount.toFixed(2)}` : '$0.00'} />
                 <SummaryRow label="Total Amount" value={`$${totalAmount.toFixed(2)}`} highlight />
               </div>
             )}

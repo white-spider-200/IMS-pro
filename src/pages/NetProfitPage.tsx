@@ -14,11 +14,26 @@ const inputCls =
 const selectCls =
   'w-full rounded-xl border border-slate-200 bg-white/70 px-4 py-2.5 text-sm text-slate-800 shadow-sm outline-none ring-0 transition focus:border-indigo-400 focus:ring-2 focus:ring-indigo-100 appearance-none';
 
+const MAX_REPORT_QUANTITY = 1_000_000;
+const MAX_REPORT_MONEY = 1_000_000_000;
+
 function toMoney(value: number, currency = 'JOD') {
   return `${currency} ${Number(value || 0).toLocaleString(undefined, {
     minimumFractionDigits: 2,
     maximumFractionDigits: 2,
   })}`;
+}
+
+function formatAmount(value: number) {
+  return Number(value || 0).toLocaleString(undefined, {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  });
+}
+
+function isFiniteInRange(value: unknown, maxValue: number) {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) && Math.abs(parsed) <= maxValue;
 }
 
 function formatMonthLabel(month: string) {
@@ -53,6 +68,43 @@ export default function NetProfitPage() {
   const [warehouseFilter, setWarehouseFilter] = useState('all');
   const [searchTerm, setSearchTerm] = useState('');
 
+  const availableMonths = useMemo(() => {
+    const values = new Set<string>();
+
+    (revenueInvoices || []).forEach((invoice) => {
+      const month = String(invoice?.created_at || '').slice(0, 7);
+      if (month) values.add(month);
+    });
+
+    (warehouseExpenses || []).forEach((expense) => {
+      const singleMonth = String(expense?.expense_date || expense?.created_at || '').slice(0, 7);
+      const startMonth = String(expense?.start_month || '').slice(0, 7);
+      const endMonth = String(expense?.end_month || '').slice(0, 7);
+
+      if (expense?.recurrence === 'monthly' && startMonth) {
+        const startDate = new Date(`${startMonth}-01T00:00:00`);
+        const endDate = endMonth ? new Date(`${endMonth}-01T00:00:00`) : null;
+
+        if (!Number.isNaN(startDate.getTime())) {
+          const cursor = new Date(startDate);
+          let guard = 0;
+          while (guard < 120) {
+            const month = cursor.toISOString().slice(0, 7);
+            values.add(month);
+            if (endDate && cursor >= endDate) break;
+            if (!endDate && month === new Date().toISOString().slice(0, 7)) break;
+            cursor.setMonth(cursor.getMonth() + 1);
+            guard += 1;
+          }
+        }
+      } else if (singleMonth) {
+        values.add(singleMonth);
+      }
+    });
+
+    return Array.from(values).sort((left, right) => right.localeCompare(left));
+  }, [revenueInvoices, warehouseExpenses]);
+
   const invoiceRows = useMemo(() => {
     const searchLower = searchTerm.trim().toLowerCase();
 
@@ -80,6 +132,12 @@ export default function NetProfitPage() {
           createdAt: invoice.created_at || '',
         };
       })
+      .filter((row) =>
+        isFiniteInRange(row.quantity, MAX_REPORT_QUANTITY)
+        && isFiniteInRange(row.sales, MAX_REPORT_MONEY)
+        && isFiniteInRange(row.cogs, MAX_REPORT_MONEY)
+        && isFiniteInRange(row.grossProfit, MAX_REPORT_MONEY)
+      )
       .filter((row) => {
         if (!searchLower) return true;
         return [row.invoiceNumber, row.customerName, row.warehouseName]
@@ -186,7 +244,12 @@ export default function NetProfitPage() {
         <div className="grid gap-4 md:grid-cols-3">
           <div>
             <label className="mb-2 block text-xs font-semibold uppercase tracking-widest text-slate-500">Month</label>
-            <input type="month" value={monthFilter} onChange={(event) => setMonthFilter(event.target.value)} className={inputCls} />
+            <select value={monthFilter} onChange={(event) => setMonthFilter(event.target.value)} className={selectCls}>
+              <option value="">All months</option>
+              {availableMonths.map((month) => (
+                <option key={month} value={month}>{formatMonthLabel(month)}</option>
+              ))}
+            </select>
           </div>
           <div>
             <label className="mb-2 block text-xs font-semibold uppercase tracking-widest text-slate-500">Warehouse</label>
@@ -237,17 +300,66 @@ export default function NetProfitPage() {
 
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-5">
         {[
-          { label: 'Net Sales', value: toMoney(summary.sales), icon: TrendingUp, accent: 'text-indigo-600 bg-indigo-50' },
-          { label: 'COGS', value: toMoney(summary.cogs), icon: Coins, accent: 'text-amber-600 bg-amber-50' },
-          { label: 'Gross Profit', value: toMoney(summary.grossProfit), icon: BarChart3, accent: 'text-emerald-600 bg-emerald-50' },
-          { label: 'Expenses', value: toMoney(summary.expenses), icon: Wallet, accent: 'text-rose-600 bg-rose-50' },
-          { label: 'Pure Profit', value: toMoney(summary.netProfit), icon: TrendingDown, accent: summary.netProfit >= 0 ? 'text-cyan-700 bg-cyan-50' : 'text-rose-700 bg-rose-50' },
+          {
+            label: 'Net Sales',
+            amount: summary.sales,
+            icon: TrendingUp,
+            accent: 'text-indigo-600 bg-indigo-50',
+            cardClass: 'border-slate-100 bg-white',
+            valueClass: 'text-slate-900',
+            currencyClass: 'text-slate-500',
+          },
+          {
+            label: 'COGS',
+            amount: summary.cogs,
+            icon: Coins,
+            accent: 'text-amber-600 bg-amber-50',
+            cardClass: 'border-slate-100 bg-white',
+            valueClass: 'text-slate-900',
+            currencyClass: 'text-slate-500',
+          },
+          {
+            label: 'Gross Profit',
+            amount: summary.grossProfit,
+            icon: BarChart3,
+            accent: 'text-emerald-600 bg-emerald-50',
+            cardClass: 'border-slate-100 bg-white',
+            valueClass: 'text-slate-900',
+            currencyClass: 'text-slate-500',
+          },
+          {
+            label: 'Expenses',
+            amount: summary.expenses,
+            icon: Wallet,
+            accent: 'text-rose-600 bg-rose-50',
+            cardClass: 'border-slate-100 bg-white',
+            valueClass: 'text-slate-900',
+            currencyClass: 'text-slate-500',
+          },
+          {
+            label: 'Pure Profit',
+            amount: summary.netProfit,
+            icon: TrendingDown,
+            accent: summary.netProfit >= 0 ? 'text-cyan-700 bg-white/15' : 'text-rose-100 bg-white/10',
+            cardClass: summary.netProfit >= 0
+              ? 'border-cyan-200 bg-gradient-to-br from-cyan-600 via-sky-600 to-indigo-700'
+              : 'border-rose-200 bg-gradient-to-br from-rose-700 via-rose-600 to-orange-500',
+            valueClass: 'text-white',
+            currencyClass: 'text-white/70',
+          },
         ].map((card) => (
-          <div key={card.label} className="rounded-2xl border border-slate-100 bg-white p-5 shadow-sm">
+          <div key={card.label} className={`overflow-hidden rounded-2xl border p-5 shadow-sm ${card.cardClass}`}>
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-xs font-bold uppercase tracking-widest text-slate-400">{card.label}</p>
-                <p className="mt-3 text-3xl font-black text-slate-900">{card.value}</p>
+                <p className={`text-xs font-bold uppercase tracking-[0.24em] ${card.label === 'Pure Profit' ? 'text-white/70' : 'text-slate-400'}`}>
+                  {card.label}
+                </p>
+                <div className="mt-3 flex items-baseline gap-2">
+                  <span className={`text-sm font-semibold uppercase tracking-[0.2em] ${card.currencyClass}`}>JOD</span>
+                  <span className={`text-4xl font-black leading-none tracking-tight tabular-nums ${card.valueClass}`}>
+                    {formatAmount(card.amount)}
+                  </span>
+                </div>
               </div>
               <div className={`flex h-11 w-11 items-center justify-center rounded-xl ${card.accent}`}>
                 <card.icon className="h-5 w-5" />

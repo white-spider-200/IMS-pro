@@ -3,7 +3,6 @@ import { calculateClientFinancials } from '../lib/clientFinancials';
 
 const STORAGE_KEY = 'ims-pro-demo-database';
 const EVENT_NAME = 'ims-pro-demo-database-change';
-
 export type DemoDatabase = {
   brands: any[];
   categories: any[];
@@ -147,6 +146,12 @@ function getDemoInvoicePaymentStatus(database: DemoDatabase, invoice: any) {
 function parseDemoTimestamp(value: unknown) {
   const date = new Date(String(value || ''));
   return Number.isNaN(date.getTime()) ? 0 : date.getTime();
+}
+
+function assertDemoTransactionValue(value: number, label: string) {
+  if (!Number.isFinite(value) || value < 0) {
+    throw new Error(`${label} must be zero or greater`);
+  }
 }
 
 function getDemoAverageBuyCostForVariantAtTime(database: DemoDatabase, variantId: string, timestamp: string) {
@@ -404,6 +409,8 @@ export function buyFromCustomerDemoStock(
     deliveryStatus?: string;
     deliveryAddress?: string;
     deliveryFee?: number;
+    paymentAmount?: number;
+    paymentNotes?: string;
     notes?: string;
     transactionTime?: string;
   },
@@ -426,9 +433,16 @@ export function buyFromCustomerDemoStock(
   const subtotal = quantity * Number(unitCost || 0);
   const deliveryFee = Number(options.deliveryFee || 0);
   const totalCost = subtotal + deliveryFee;
+  const paymentAmount = Number(options.paymentAmount || 0);
+  assertDemoTransactionValue(paymentAmount, 'Payment amount');
+  if (paymentAmount > totalCost) {
+    throw new Error('Payment amount cannot exceed total cost');
+  }
+  const paymentStatus = paymentAmount <= 0 ? 'pending' : paymentAmount >= totalCost ? 'paid' : 'partial';
   const movementId = `mov-${crypto.randomUUID()}`;
   const purchaseInvoiceId = `po-${crypto.randomUUID()}`;
   const transferId = `trf-${crypto.randomUUID()}`;
+  const invoiceNumber = `PC-${Date.now()}`;
 
   upsertBalance(database, variantId, warehouseId, quantity);
 
@@ -454,7 +468,7 @@ export function buyFromCustomerDemoStock(
 
   database.purchase_invoices.unshift({
     id: purchaseInvoiceId,
-    invoice_number: `PC-${Date.now()}`,
+    invoice_number: invoiceNumber,
     supplier_id: null,
     client_id: clientId,
     source_type: 'customer',
@@ -474,10 +488,28 @@ export function buyFromCustomerDemoStock(
     delivery_address: options.deliveryAddress || '',
     total_cost: totalCost,
     status: 'received',
-    payment_status: 'pending',
-    paid_amount: 0,
+    payment_status: paymentStatus,
+    paid_amount: paymentAmount,
+    paid_at: paymentStatus === 'paid' ? timestamp : null,
     created_at: timestamp,
   });
+
+  if (paymentAmount > 0) {
+    database.client_payments.unshift({
+      id: `pay-${crypto.randomUUID()}`,
+      client_id: clientId,
+      client_name: clientName,
+      direction: 'outgoing',
+      scope: 'purchase',
+      invoice_id: purchaseInvoiceId,
+      invoice_number: invoiceNumber,
+      receipt_number: `PAY-${Date.now()}`,
+      amount: paymentAmount,
+      notes: options.paymentNotes || options.notes || `Payment recorded with customer purchase invoice ${invoiceNumber}`,
+      created_at: timestamp,
+      warehouse_id: warehouseId,
+    });
+  }
 
   database.transfers.unshift({
     id: transferId,
@@ -522,6 +554,7 @@ export function buyFromCustomerDemoStock(
     status: 'completed',
   });
 
+  syncClientFinancials(database, clientId, clientName);
   persist(database);
 }
 
@@ -537,11 +570,17 @@ export function issueDemoStock(
     deliveryStatus?: string;
     deliveryAddress?: string;
     deliveryFee?: number;
+    paymentAmount?: number;
+    paymentNotes?: string;
     notes?: string;
     transactionTime?: string;
   } = {}
 ) {
   const database = getDemoDatabase();
+  if (!Number.isFinite(quantity) || quantity <= 0) {
+    throw new Error('Quantity must be greater than zero');
+  }
+  assertDemoTransactionValue(unitPrice, 'Sell price');
   const balance = database.inventory_balances.find(
     (entry) => entry.variant_id === variantId && entry.warehouse_id === warehouseId
   );
@@ -559,14 +598,28 @@ export function issueDemoStock(
   const timestamp = options.transactionTime || new Date().toISOString();
   const vatRate = Number(options.vatRate || 0);
   const deliveryFee = Number(options.deliveryFee || 0);
+  assertDemoTransactionValue(vatRate, 'VAT');
+  if (vatRate > 100) {
+    throw new Error('VAT cannot exceed 100%');
+  }
+  assertDemoTransactionValue(deliveryFee, 'Delivery fee');
   const subtotal = quantity * unitPrice;
   const vatAmount = subtotal * (vatRate / 100);
   const totalAmount = subtotal + vatAmount + deliveryFee;
+  const paymentAmount = Number(options.paymentAmount || 0);
+  assertDemoTransactionValue(paymentAmount, 'Payment amount');
+  if (paymentAmount > totalAmount) {
+    throw new Error('Payment amount cannot exceed total amount');
+  }
+  assertDemoTransactionValue(subtotal, 'Subtotal');
+  assertDemoTransactionValue(totalAmount, 'Total amount');
   const costPerUnitAtSale = getDemoAverageBuyCostForVariantAtTime(database, variantId, timestamp);
   const cogsAmount = quantity * costPerUnitAtSale;
   const grossProfit = subtotal - cogsAmount;
   const revenueInvoiceId = `inv-${crypto.randomUUID()}`;
   const transferId = `trf-${crypto.randomUUID()}`;
+  const invoiceStatus = paymentAmount <= 0 ? 'pending' : paymentAmount >= totalAmount ? 'paid' : 'partial';
+  const invoiceNumber = `INV-${Date.now()}`;
   database.stock_movements.unshift({
     id: movementId,
     variant_id: variantId,
@@ -582,7 +635,7 @@ export function issueDemoStock(
 
   database.revenue_invoices.unshift({
     id: revenueInvoiceId,
-    invoice_number: `INV-${Date.now()}`,
+    invoice_number: invoiceNumber,
     customer_name: customerName,
     client_id: clientId || null,
     items: [{ variant_id: variantId, quantity, unit_price: unitPrice, total: subtotal }],
@@ -596,12 +649,30 @@ export function issueDemoStock(
     cogs_amount: cogsAmount,
     gross_profit: grossProfit,
     total_amount: totalAmount,
-    status: 'pending',
-    paid_amount: 0,
+    status: invoiceStatus,
+    paid_amount: paymentAmount,
+    paid_at: invoiceStatus === 'paid' ? timestamp : null,
     warehouse_id: warehouseId,
     movement_id: movementId,
     created_at: timestamp,
   });
+
+  if (paymentAmount > 0) {
+    database.client_payments.unshift({
+      id: `pay-${crypto.randomUUID()}`,
+      client_id: clientId || null,
+      client_name: customerName,
+      direction: 'incoming',
+      scope: 'sale',
+      invoice_id: revenueInvoiceId,
+      invoice_number: invoiceNumber,
+      receipt_number: `PAY-${Date.now()}`,
+      amount: paymentAmount,
+      notes: options.paymentNotes || options.notes || `Payment recorded with invoice ${invoiceNumber}`,
+      created_at: timestamp,
+      warehouse_id: warehouseId,
+    });
+  }
 
   database.transfers.unshift({
     id: transferId,

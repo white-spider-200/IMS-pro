@@ -16,8 +16,16 @@ const inputCls =
 const selectCls =
   'w-full rounded-xl border border-slate-200 bg-white/70 px-4 py-2.5 text-sm text-slate-800 shadow-sm outline-none ring-0 transition focus:border-indigo-400 focus:ring-2 focus:ring-indigo-100 appearance-none';
 
+const MAX_REPORT_QUANTITY = 1_000_000;
+const MAX_REPORT_MONEY = 1_000_000_000;
+
 function toMoney(value: number) {
   return `$${Number(value || 0).toLocaleString()}`;
+}
+
+function isFiniteInRange(value: unknown, maxValue: number) {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) && Math.abs(parsed) <= maxValue;
 }
 
 export default function CogsReportPage() {
@@ -69,6 +77,13 @@ export default function CogsReportPage() {
           costPerUnit: Number(invoice.cost_per_unit_at_sale || 0),
         };
       })
+      .filter((row) =>
+        isFiniteInRange(row.quantity, MAX_REPORT_QUANTITY)
+        && isFiniteInRange(row.sales, MAX_REPORT_MONEY)
+        && isFiniteInRange(row.cogs, MAX_REPORT_MONEY)
+        && isFiniteInRange(row.grossProfit, MAX_REPORT_MONEY)
+        && isFiniteInRange(row.costPerUnit, MAX_REPORT_MONEY)
+      )
       .filter((row) => {
         if (!searchLower) return true;
         return [
@@ -81,6 +96,31 @@ export default function CogsReportPage() {
       })
       .sort((left, right) => new Date(right.month || 0).getTime() - new Date(left.month || 0).getTime());
   }, [clients, monthFilter, products, revenueInvoices, searchTerm, variants, warehouseFilter, warehouses]);
+
+  const hiddenCorruptInvoiceCount = useMemo(() => {
+    return (revenueInvoices || [])
+      .filter((invoice) => invoice && invoice.status !== 'cancelled')
+      .filter((invoice) => invoice.cogs_amount !== undefined || invoice.gross_profit !== undefined || invoice.cost_per_unit_at_sale !== undefined)
+      .filter((invoice) => !monthFilter || String(invoice.created_at || '').slice(0, 7) === monthFilter)
+      .filter((invoice) => warehouseFilter === 'all' || invoice.warehouse_id === warehouseFilter)
+      .filter((invoice) => {
+        const quantity = Array.isArray(invoice.items)
+          ? invoice.items.reduce((sum: number, entry: any) => sum + Number(entry.quantity || 0), 0)
+          : 0;
+        const sales = Number(invoice.subtotal ?? invoice.total_amount ?? 0);
+        const cogs = Number(invoice.cogs_amount || 0);
+        const grossProfit = Number(invoice.gross_profit || 0);
+        const costPerUnit = Number(invoice.cost_per_unit_at_sale || 0);
+
+        return !(
+          isFiniteInRange(quantity, MAX_REPORT_QUANTITY)
+          && isFiniteInRange(sales, MAX_REPORT_MONEY)
+          && isFiniteInRange(cogs, MAX_REPORT_MONEY)
+          && isFiniteInRange(grossProfit, MAX_REPORT_MONEY)
+          && isFiniteInRange(costPerUnit, MAX_REPORT_MONEY)
+        );
+      }).length;
+  }, [monthFilter, revenueInvoices, warehouseFilter]);
 
   const summary = useMemo(() => {
     return rows.reduce(
@@ -140,6 +180,11 @@ export default function CogsReportPage() {
             </div>
           </div>
         </div>
+        {hiddenCorruptInvoiceCount > 0 ? (
+          <div className="mt-4 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+            {hiddenCorruptInvoiceCount} corrupted invoice {hiddenCorruptInvoiceCount === 1 ? 'was' : 'were'} hidden from this report because the saved numbers are unrealistically large.
+          </div>
+        ) : null}
       </div>
 
       <div className="grid gap-4 md:grid-cols-4">

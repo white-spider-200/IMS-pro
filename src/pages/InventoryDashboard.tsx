@@ -4,6 +4,7 @@ import { collection, onSnapshot, query, orderBy, getDocs, doc, updateDoc } from 
 import { Boxes, Plus, ArrowRightLeft, Search, Filter, Warehouse as WarehouseIcon, Package, AlertTriangle, History as HistoryIcon, List, X, Users, Info, DollarSign, Ban } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { toast } from 'sonner';
+import { sanitizeMoney, sanitizeQuantity } from '../lib/financialGuards';
 import { cn } from '../lib/utils';
 import { InventoryService } from '../services/inventoryService';
 import { seedInitialData, seedBigData, clearAllData } from '../lib/seed';
@@ -1342,30 +1343,30 @@ export default function InventoryDashboard() {
                           <p className="font-bold text-gray-800">{getProductName(item.variant_id)}</p>
                           <p className="text-[10px] font-mono text-gray-500 mt-1">{getVariantName(item.variant_id).split(' ')[0]}</p>
                         </td>
-                        <td className="px-6 py-4 text-right font-medium text-gray-600">{item.quantity}</td>
-                        <td className="px-6 py-4 text-right font-medium text-gray-600">${item.unit_price.toLocaleString()}</td>
-                        <td className="px-6 py-4 text-right font-black text-gray-900">${item.total.toLocaleString()}</td>
+                        <td className="px-6 py-4 text-right font-medium text-gray-600">{sanitizeQuantity(item.quantity).toLocaleString()}</td>
+                        <td className="px-6 py-4 text-right font-medium text-gray-600">${sanitizeMoney(item.unit_price).toLocaleString()}</td>
+                        <td className="px-6 py-4 text-right font-black text-gray-900">${sanitizeMoney(item.total).toLocaleString()}</td>
                       </tr>
                     ))}
                   </tbody>
                 </table>
                 <div className="bg-gray-50/50 p-6 flex justify-between items-center border-t border-gray-100">
                   <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Total Amount</span>
-                  <span className="text-3xl font-black text-emerald-600">${selectedInvoice.total_amount.toLocaleString()}</span>
+                  <span className="text-3xl font-black text-emerald-600">${sanitizeMoney(selectedInvoice.total_amount).toLocaleString()}</span>
                 </div>
                 {(selectedInvoice.cogs_amount !== undefined || selectedInvoice.gross_profit !== undefined) && (
                   <div className="grid grid-cols-1 gap-4 border-t border-gray-100 bg-white p-6 md:grid-cols-3">
                     <div className="rounded-2xl border border-gray-100 bg-gray-50 p-4">
                       <p className="text-[10px] font-black uppercase tracking-widest text-gray-400">Cost / Unit</p>
-                      <p className="mt-2 text-lg font-black text-gray-900">${Number(selectedInvoice.cost_per_unit_at_sale || 0).toLocaleString()}</p>
+                      <p className="mt-2 text-lg font-black text-gray-900">${sanitizeMoney(selectedInvoice.cost_per_unit_at_sale || 0).toLocaleString()}</p>
                     </div>
                     <div className="rounded-2xl border border-amber-100 bg-amber-50 p-4">
                       <p className="text-[10px] font-black uppercase tracking-widest text-amber-500">COGS</p>
-                      <p className="mt-2 text-lg font-black text-amber-900">${Number(selectedInvoice.cogs_amount || 0).toLocaleString()}</p>
+                      <p className="mt-2 text-lg font-black text-amber-900">${sanitizeMoney(selectedInvoice.cogs_amount || 0).toLocaleString()}</p>
                     </div>
                     <div className="rounded-2xl border border-emerald-100 bg-emerald-50 p-4">
                       <p className="text-[10px] font-black uppercase tracking-widest text-emerald-500">Gross Profit</p>
-                      <p className="mt-2 text-lg font-black text-emerald-900">${Number(selectedInvoice.gross_profit || 0).toLocaleString()}</p>
+                      <p className="mt-2 text-lg font-black text-emerald-900">${sanitizeMoney(selectedInvoice.gross_profit || 0).toLocaleString()}</p>
                     </div>
                   </div>
                 )}
@@ -2326,18 +2327,18 @@ export default function InventoryDashboard() {
                   {isReturnInvoice && (
                     <div className="flex justify-between items-center text-sm">
                       <span className="text-gray-500 font-medium">Amount</span>
-                      <span className="font-bold text-gray-800">${Number(selectedTransferInvoice.total_amount || 0).toLocaleString()}</span>
+                      <span className="font-bold text-gray-800">${sanitizeMoney(selectedTransferInvoice.total_amount || 0).toLocaleString()}</span>
                     </div>
                   )}
                   {!isReturnInvoice && (
                     <>
                       <div className="flex justify-between items-center text-sm">
                         <span className="text-gray-500 font-medium">COGS</span>
-                        <span className="font-bold text-amber-700">${Number(selectedTransferInvoice.cogs_amount || 0).toLocaleString()}</span>
+                        <span className="font-bold text-amber-700">${sanitizeMoney(selectedTransferInvoice.cogs_amount || 0).toLocaleString()}</span>
                       </div>
                       <div className="flex justify-between items-center text-sm">
                         <span className="text-gray-500 font-medium">Gross Profit</span>
-                        <span className="font-bold text-emerald-700">${Number(selectedTransferInvoice.gross_profit || 0).toLocaleString()}</span>
+                        <span className="font-bold text-emerald-700">${sanitizeMoney(selectedTransferInvoice.gross_profit || 0).toLocaleString()}</span>
                       </div>
                     </>
                   )}

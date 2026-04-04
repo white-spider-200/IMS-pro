@@ -23,6 +23,7 @@ import { toast } from 'sonner';
 import { cn } from '../lib/utils';
 import { Product, ProductVariant, PurchaseOrder, Supplier, Warehouse, InventoryBalance, Backorder } from '../types';
 import { seedBigData } from '../lib/seed';
+import { sanitizeMoney } from '../lib/financialGuards';
 
 export default function ProcurementDashboard() {
   const [variants, setVariants] = useState<ProductVariant[]>([]);
@@ -306,7 +307,7 @@ export default function ProcurementDashboard() {
                     >
                       {suppliers.find(s => s.id === po.supplier_id)?.name}
                     </button>
-                    <p className="text-xs text-gray-500">${po.total_amount.toLocaleString()}</p>
+                    <p className="text-xs text-gray-500">${sanitizeMoney(po.total_amount).toLocaleString()}</p>
                   </div>
                   <div className="flex items-center justify-between pt-2 border-t border-gray-200">
                     <div className="flex items-center gap-1 text-[10px] text-gray-400">
@@ -446,4 +447,3 @@ export default function ProcurementDashboard() {
     </div>
   );
 }
-

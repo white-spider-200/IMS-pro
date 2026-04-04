@@ -4,6 +4,7 @@ import { useNavigate, useOutletContext, useParams } from 'react-router-dom';
 import { toast } from 'sonner';
 import { calculateClientFinancials } from '../lib/clientFinancials';
 import { exportRowsToExcel, exportTextLinesToPdf } from '../lib/fileExports';
+import { hasValidTransferTotals, sanitizeMoney, sanitizeQuantity } from '../lib/financialGuards';
 
 type OutletContext = {
   clients?: any[];
@@ -86,7 +87,7 @@ export default function ClientTransfersPage() {
         const invoice = isSell
           ? revenueInvoices.find((entry) => entry.id === transfer.revenue_invoice_id) || null
           : purchaseInvoices.find((entry) => entry.id === transfer.purchase_invoice_id) || null;
-        const quantity = Number(
+        const quantity = sanitizeQuantity(
           transfer.quantity
           ?? invoice?.quantity_purchased
           ?? invoice?.requested_quantity
@@ -107,7 +108,7 @@ export default function ClientTransfersPage() {
           warehouse: getWarehouseName(transfer.warehouse_id || invoice?.warehouse_id || invoice?.receiving_warehouse_id),
           type: isSell ? 'sell' : 'buy',
           quantity,
-          totalAmount: Number(transfer.total_amount ?? invoice?.total_amount ?? invoice?.total_cost ?? 0),
+          totalAmount: sanitizeMoney(transfer.total_amount ?? invoice?.total_amount ?? invoice?.total_cost ?? 0),
           status: transfer.status || invoice?.status || 'N/A',
           items: itemSummary,
           customerName: transfer.customer_name || invoice?.customer_name || client.name || 'N/A',
@@ -115,6 +116,7 @@ export default function ClientTransfersPage() {
           invoice,
         };
       })
+      .filter((row) => hasValidTransferTotals({ quantity: row.quantity, total_amount: row.totalAmount }, row.invoice))
       .sort((left, right) => {
         const leftTime = new Date(left.createdAt || 0).getTime();
         const rightTime = new Date(right.createdAt || 0).getTime();
@@ -338,7 +340,7 @@ export default function ClientTransfersPage() {
                           </span>
                         </td>
                         <td className="px-4 py-4 text-gray-600">{row.items}</td>
-                        <td className="px-4 py-4 text-right font-semibold text-gray-800">{row.quantity}</td>
+                        <td className="px-4 py-4 text-right font-semibold text-gray-800">{row.quantity.toLocaleString()}</td>
                         <td className="px-4 py-4 text-right font-bold text-gray-900">${row.totalAmount.toLocaleString()}</td>
                         <td className="px-4 py-4">
                           <span className="inline-flex rounded-full bg-gray-100 px-2.5 py-1 text-xs font-semibold text-gray-700">

@@ -3,6 +3,7 @@ import { ArrowLeft, Download, Eye, FileSpreadsheet, FileText, Receipt, X } from 
 import { useNavigate, useOutletContext, useParams } from 'react-router-dom';
 import { toast } from 'sonner';
 import { exportRowsToExcel, exportTextLinesToPdf } from '../lib/fileExports';
+import { hasValidTransferTotals, sanitizeMoney, sanitizeQuantity } from '../lib/financialGuards';
 
 type OutletContext = {
   suppliers?: any[];
@@ -78,12 +79,13 @@ export default function SupplierTransfersPage() {
           date: transfer.created_at ? new Date(transfer.created_at).toLocaleString() : 'N/A',
           warehouse: getWarehouseName(transfer.warehouse_id || invoice?.receiving_warehouse_id),
           item: variant ? `${product?.name || 'Unknown Product'} / ${variant.variant_code || variant.barcode}` : product?.name || 'N/A',
-          quantity: Number(transfer.quantity ?? invoice?.quantity_purchased ?? invoice?.requested_quantity ?? 0),
-          totalAmount: Number(transfer.total_amount ?? invoice?.total_cost ?? 0),
+          quantity: sanitizeQuantity(transfer.quantity ?? invoice?.quantity_purchased ?? invoice?.requested_quantity ?? 0),
+          totalAmount: sanitizeMoney(transfer.total_amount ?? invoice?.total_cost ?? 0),
           status: transfer.status || invoice?.status || 'N/A',
           invoice,
         };
       })
+      .filter((row) => hasValidTransferTotals({ quantity: row.quantity, total_amount: row.totalAmount }, row.invoice))
       .sort((left, right) => new Date(right.createdAt || 0).getTime() - new Date(left.createdAt || 0).getTime());
   }, [products, purchaseInvoices, supplier, transfers, variants, warehouses]);
 
@@ -259,7 +261,7 @@ export default function SupplierTransfersPage() {
                         <td className="px-4 py-4 text-gray-600">{row.date}</td>
                         <td className="px-4 py-4 text-gray-700">{row.warehouse}</td>
                         <td className="px-4 py-4 text-gray-700">{row.item}</td>
-                        <td className="px-4 py-4 text-right font-semibold text-gray-800">{row.quantity}</td>
+                        <td className="px-4 py-4 text-right font-semibold text-gray-800">{row.quantity.toLocaleString()}</td>
                         <td className="px-4 py-4 text-right font-bold text-gray-900">${row.totalAmount.toLocaleString()}</td>
                         <td className="px-4 py-4">
                           <span className="inline-flex rounded-full bg-gray-100 px-2.5 py-1 text-xs font-semibold text-gray-700">

@@ -22,6 +22,8 @@ type IssueStockOptions = {
   deliveryStatus?: string;
   deliveryAddress?: string;
   deliveryFee?: number;
+  paymentAmount?: number;
+  paymentNotes?: string;
   notes?: string;
   transactionTime?: string;
 };
@@ -57,6 +59,8 @@ type BuyFromCustomerInput = {
   deliveryStatus?: string;
   deliveryAddress?: string;
   deliveryFee?: number;
+  paymentAmount?: number;
+  paymentNotes?: string;
   notes?: string;
   idempotencyKey: string;
   transactionTime?: string;
@@ -86,7 +90,7 @@ const RETURN_INVOICES_COLLECTION = 'return_invoices';
 const TRANSFERS_COLLECTION = 'transfers';
 const INVENTORY_UPDATE_RECORDS_COLLECTION = 'inventory_update_records';
 const SUPPLIER_PRODUCT_RELATIONS_COLLECTION = 'supplier_product_relations';
-
+const CLIENT_PAYMENTS_COLLECTION = 'client_payments';
 const nowIso = () => new Date().toISOString();
 
 const normalizeNumber = (value: unknown) => {
@@ -97,6 +101,12 @@ const normalizeNumber = (value: unknown) => {
 const assertPositiveQuantity = (quantity: number) => {
   if (!Number.isFinite(quantity) || quantity <= 0) {
     throw new Error('Quantity must be greater than zero');
+  }
+};
+
+const assertTransactionMoney = (value: number, label: string) => {
+  if (!Number.isFinite(value) || value < 0) {
+    throw new Error(`${label} must be zero or greater`);
   }
 };
 
@@ -236,13 +246,30 @@ export const InventoryService = {
     const unitPrice = normalizeNumber(options.unitPrice);
     const vatRate = normalizeNumber(options.vatRate);
     const deliveryFee = normalizeNumber(options.deliveryFee);
+    const paymentAmount = normalizeNumber(options.paymentAmount);
+    assertTransactionMoney(unitPrice, 'Sell price');
+    assertTransactionMoney(vatRate, 'VAT');
+    if (vatRate > 100) {
+      throw new Error('VAT cannot exceed 100%');
+    }
+    assertTransactionMoney(deliveryFee, 'Delivery fee');
     const subtotal = quantity * unitPrice;
     const vatAmount = subtotal * (vatRate / 100);
     const total = subtotal + vatAmount + deliveryFee;
+    assertTransactionMoney(paymentAmount, 'Payment amount');
+    if (paymentAmount > total) {
+      throw new Error('Payment amount cannot exceed total amount');
+    }
+    assertTransactionMoney(subtotal, 'Subtotal');
+    assertTransactionMoney(total, 'Total amount');
     const costPerUnitAtSale = await getAverageBuyCostForVariantAtTime(variantId, timestamp);
     const cogsAmount = quantity * costPerUnitAtSale;
     const grossProfit = subtotal - cogsAmount;
     const invoiceNumber = `INV-${Date.now()}`;
+    const paidAmount = Math.min(paymentAmount, total);
+    const invoiceStatus = paidAmount <= 0 ? 'pending' : paidAmount >= total ? 'paid' : 'partial';
+    const paymentRef = paidAmount > 0 ? doc(collection(db, CLIENT_PAYMENTS_COLLECTION)) : null;
+    const receiptNumber = paidAmount > 0 ? `PAY-${Date.now()}` : null;
 
     await runTransaction(db, async (transaction) => {
       const balanceSnapshot = await transaction.get(balanceRef);
@@ -296,12 +323,29 @@ export const InventoryService = {
         cost_per_unit_at_sale: costPerUnitAtSale,
         cogs_amount: cogsAmount,
         gross_profit: grossProfit,
-        status: 'pending',
-        paid_amount: 0,
+        status: invoiceStatus,
+        paid_amount: paidAmount,
+        paid_at: invoiceStatus === 'paid' ? timestamp : null,
         warehouse_id: warehouseId,
         movement_id: movementRef.id,
         created_at: timestamp,
       });
+
+      if (paymentRef && receiptNumber) {
+        transaction.set(paymentRef, {
+          client_id: options.clientId ?? null,
+          client_name: customerName,
+          direction: 'incoming',
+          scope: 'sale',
+          invoice_id: invoiceRef.id,
+          invoice_number: invoiceNumber,
+          receipt_number: receiptNumber,
+          amount: paidAmount,
+          notes: options.paymentNotes || options.notes || `Payment recorded with invoice ${invoiceNumber}`,
+          created_at: timestamp,
+          warehouse_id: warehouseId,
+        });
+      }
 
       transaction.set(transferRef, {
         transfer_number: `TRF-${Date.now()}`,
@@ -329,11 +373,11 @@ export const InventoryService = {
         const clientData = clientSnapshot.data() ?? {};
         transaction.set(clientRef, {
           total_billed: normalizeNumber(clientData.total_billed) + total,
-          paid_amount: normalizeNumber(clientData.paid_amount),
-          pending_amount: normalizeNumber(clientData.pending_amount) + total,
-          balance_due: normalizeNumber(clientData.balance_due) + total,
+          paid_amount: normalizeNumber(clientData.paid_amount) + paidAmount,
+          pending_amount: normalizeNumber(clientData.pending_amount) + (total - paidAmount),
+          balance_due: normalizeNumber(clientData.balance_due) + (total - paidAmount),
           credit_balance: normalizeNumber(clientData.credit_balance),
-          balance: normalizeNumber(clientData.balance) + total,
+          balance: normalizeNumber(clientData.balance) + (total - paidAmount),
           last_modified: timestamp,
         }, { merge: true });
       }
@@ -728,6 +772,8 @@ export const InventoryService = {
       deliveryStatus,
       deliveryAddress,
       deliveryFee,
+      paymentAmount,
+      paymentNotes,
       notes,
       idempotencyKey,
       transactionTime,
@@ -757,6 +803,16 @@ export const InventoryService = {
     const subtotal = quantity * unitCost;
     const normalizedDeliveryFee = normalizeNumber(deliveryFee);
     const totalCost = subtotal + normalizedDeliveryFee;
+    const normalizedPaymentAmount = normalizeNumber(paymentAmount);
+    assertTransactionMoney(normalizedPaymentAmount, 'Payment amount');
+    if (normalizedPaymentAmount > totalCost) {
+      throw new Error('Payment amount cannot exceed total cost');
+    }
+    const paidAmount = Math.min(normalizedPaymentAmount, totalCost);
+    const paymentStatus = paidAmount <= 0 ? 'pending' : paidAmount >= totalCost ? 'paid' : 'partial';
+    const invoiceNumber = `PC-${Date.now()}`;
+    const paymentRef = paidAmount > 0 ? doc(collection(db, CLIENT_PAYMENTS_COLLECTION)) : null;
+    const receiptNumber = paidAmount > 0 ? `PAY-${Date.now()}` : null;
 
     await runTransaction(db, async (transaction) => {
       const balanceSnapshot = await transaction.get(balanceRef);
@@ -796,7 +852,7 @@ export const InventoryService = {
       });
 
       transaction.set(purchaseInvoiceRef, {
-        invoice_number: `PC-${Date.now()}`,
+        invoice_number: invoiceNumber,
         supplier_id: null,
         client_id: clientId,
         source_type: 'customer',
@@ -816,10 +872,27 @@ export const InventoryService = {
         delivery_address: deliveryAddress || '',
         total_cost: totalCost,
         status: 'received',
-        payment_status: 'pending',
-        paid_amount: 0,
+        payment_status: paymentStatus,
+        paid_amount: paidAmount,
+        paid_at: paymentStatus === 'paid' ? timestamp : null,
         created_at: timestamp,
       });
+
+      if (paymentRef && receiptNumber) {
+        transaction.set(paymentRef, {
+          client_id: clientId,
+          client_name: clientName,
+          direction: 'outgoing',
+          scope: 'purchase',
+          invoice_id: purchaseInvoiceRef.id,
+          invoice_number: invoiceNumber,
+          receipt_number: receiptNumber,
+          amount: paidAmount,
+          notes: paymentNotes || notes || `Payment recorded with customer purchase invoice ${invoiceNumber}`,
+          created_at: timestamp,
+          warehouse_id: warehouseId,
+        });
+      }
 
       transaction.set(transferRef, {
         transfer_number: `TRF-${Date.now()}`,
@@ -861,6 +934,15 @@ export const InventoryService = {
         created_at: timestamp,
         status: 'completed',
       });
+
+      const clientRef = doc(db, 'clients', clientId);
+      const clientSnapshot = await transaction.get(clientRef);
+      const clientData = clientSnapshot.data() ?? {};
+      transaction.set(clientRef, {
+        credit_balance: normalizeNumber(clientData.credit_balance) + (totalCost - paidAmount),
+        balance: normalizeNumber(clientData.balance) - (totalCost - paidAmount),
+        last_modified: timestamp,
+      }, { merge: true });
     });
   },
 

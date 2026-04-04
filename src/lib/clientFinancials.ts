@@ -1,3 +1,5 @@
+import { hasValidInvoiceTotals, sanitizeMoney } from './financialGuards';
+
 export function invoiceMatchesClient(client: any, invoice: any) {
   if (!client || !invoice) return false;
   if (client.id && invoice.client_id === client.id) return true;
@@ -17,17 +19,20 @@ export function paymentMatchesClient(client: any, payment: any) {
 }
 
 export function getInvoiceTotal(invoice: any) {
-  return Number(invoice?.total_amount ?? invoice?.total_cost ?? 0);
+  return sanitizeMoney(invoice?.total_amount ?? invoice?.total_cost ?? 0);
 }
 
 export function getClientSaleInvoices(client: any, revenueInvoices: any[]) {
-  return (revenueInvoices || []).filter((invoice) => invoiceMatchesClient(client, invoice));
+  return (revenueInvoices || [])
+    .filter((invoice) => invoiceMatchesClient(client, invoice))
+    .filter((invoice) => hasValidInvoiceTotals(invoice));
 }
 
 export function getClientPurchaseInvoices(client: any, purchaseInvoices: any[]) {
   return (purchaseInvoices || []).filter((invoice) => {
     if (String(invoice?.source_type || '') !== 'customer') return false;
-    return invoiceMatchesClient(client, invoice);
+    if (!invoiceMatchesClient(client, invoice)) return false;
+    return hasValidInvoiceTotals(invoice);
   });
 }
 
@@ -49,7 +54,7 @@ export function getInvoicePayments(invoice: any, payments: any[]) {
 }
 
 export function getInvoicePaidAmount(invoice: any, payments: any[]) {
-  return getInvoicePayments(invoice, payments).reduce((sum, payment) => sum + Number(payment.amount || 0), 0);
+  return getInvoicePayments(invoice, payments).reduce((sum, payment) => sum + sanitizeMoney(payment.amount || 0), 0);
 }
 
 export function getInvoiceRemainingAmount(invoice: any, payments: any[]) {
@@ -80,11 +85,11 @@ export function calculateClientFinancials(
   const outgoingPayments = getClientPayments(client, clientPayments, { direction: 'outgoing' });
 
   const totalBilled = matchedSales.reduce((sum, invoice) => sum + getInvoiceTotal(invoice), 0);
-  const paidAmount = incomingPayments.reduce((sum, payment) => sum + Number(payment.amount || 0), 0);
+  const paidAmount = incomingPayments.reduce((sum, payment) => sum + sanitizeMoney(payment.amount || 0), 0);
   const pendingAmount = Math.max(totalBilled - paidAmount, 0);
 
   const totalPurchased = matchedPurchases.reduce((sum, invoice) => sum + getInvoiceTotal(invoice), 0);
-  const purchasePaidAmount = outgoingPayments.reduce((sum, payment) => sum + Number(payment.amount || 0), 0);
+  const purchasePaidAmount = outgoingPayments.reduce((sum, payment) => sum + sanitizeMoney(payment.amount || 0), 0);
   const purchasePendingAmount = Math.max(totalPurchased - purchasePaidAmount, 0);
 
   const balanceDue = pendingAmount;

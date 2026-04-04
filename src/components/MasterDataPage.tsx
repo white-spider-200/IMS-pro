@@ -6,6 +6,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { toast } from 'sonner';
 import { handleFirestoreError, OperationType } from '../lib/firestore-errors';
 import { cn } from '../lib/utils';
+import { sanitizeMoney, sanitizeQuantity } from '../lib/financialGuards';
 import AutocompleteSearch from './AutocompleteSearch';
 import { useNavigate, useOutletContext } from 'react-router-dom';
 import { removeDemoCollectionItem, saveDemoCollectionItem } from '../demo/demoDatabase';
@@ -359,7 +360,7 @@ export default function MasterDataPage({
         const warehouseName = getWarehouseName(
           transfer.warehouse_id || linkedInvoice?.warehouse_id || linkedInvoice?.receiving_warehouse_id
         );
-        const totalQuantity = Number(
+        const totalQuantity = sanitizeQuantity(
           transfer.quantity
           ?? linkedInvoice?.quantity_purchased
           ?? linkedInvoice?.requested_quantity
@@ -371,7 +372,7 @@ export default function MasterDataPage({
         return {
           ...transfer,
           invoice_number: linkedInvoice?.invoice_number || 'N/A',
-          total_amount: Number(transfer.total_amount ?? linkedInvoice?.total_amount ?? linkedInvoice?.total_cost ?? 0),
+          total_amount: sanitizeMoney(transfer.total_amount ?? linkedInvoice?.total_amount ?? linkedInvoice?.total_cost ?? 0),
           status: transfer.status || linkedInvoice?.status || 'N/A',
           linkedMovement,
           linkedInvoice,
@@ -1066,11 +1067,11 @@ export default function MasterDataPage({
                                     </span>
                                   </td>
                                   <td className="px-4 py-3 text-right font-semibold text-gray-700">
-                                    {invoice.totalQuantity}
+                                    {sanitizeQuantity(invoice.totalQuantity)}
                                   </td>
                                   <td className="px-4 py-3 text-right font-bold text-gray-800">
                                     {typeof invoice.total_amount === 'number'
-                                      ? `$${invoice.total_amount.toLocaleString()}`
+                                      ? `$${sanitizeMoney(invoice.total_amount).toLocaleString()}`
                                       : 'N/A'}
                                   </td>
                                 </tr>

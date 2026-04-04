@@ -14,6 +14,7 @@ import ReturnPage from './pages/ReturnPage';
 import WarehouseExpensesPage from './pages/WarehouseExpensesPage';
 import CogsReportPage from './pages/CogsReportPage';
 import NetProfitPage from './pages/NetProfitPage';
+import AccountingPage from './pages/AccountingPage';
 import { useState, useEffect } from 'react';
 import { db, auth } from './firebase';
 import { collection, onSnapshot } from 'firebase/firestore';
@@ -296,6 +297,16 @@ export default function App() {
           <Route path="/expenses" element={<WarehouseExpensesPage />} />
           <Route path="/cogs" element={<CogsReportPage />} />
           <Route path="/net-profit" element={<NetProfitPage />} />
+          <Route path="/accounting" element={<Navigate to="/accounting/profit-loss" replace />} />
+          <Route path="/accounting/profit-loss" element={<AccountingPage reportType="profit-loss" />} />
+          <Route path="/accounting/aged-receivable" element={<AccountingPage reportType="aged-receivable" />} />
+          <Route path="/accounting/aged-payable" element={<AccountingPage reportType="aged-payable" />} />
+          <Route path="/accounting/cash-flow" element={<AccountingPage reportType="cash-flow" />} />
+          <Route path="/accounting/tax-report" element={<AccountingPage reportType="tax-report" />} />
+          <Route path="/accounting/accounts-receivable" element={<Navigate to="/accounting/aged-receivable" replace />} />
+          <Route path="/accounting/accounts-payable" element={<Navigate to="/accounting/aged-payable" replace />} />
+          <Route path="/accounting/cashflow" element={<Navigate to="/accounting/cash-flow" replace />} />
+          <Route path="/accounting/vat-summary" element={<Navigate to="/accounting/tax-report" replace />} />
 
           <Route path="/reports/movements" element={<StockMovementHistory />} />
 

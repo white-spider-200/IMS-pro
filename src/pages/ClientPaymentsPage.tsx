@@ -16,6 +16,7 @@ import {
   getInvoiceTotal,
 } from '../lib/clientFinancials';
 import { exportRowsToExcel, exportTextLinesToPdf } from '../lib/fileExports';
+import { sanitizeMoney } from '../lib/financialGuards';
 
 type OutletContext = {
   isDemoMode?: boolean;
@@ -74,7 +75,7 @@ function buildPaymentInvoiceLines(payment: any, client: any) {
     `Direction: ${payment.direction === 'incoming' ? 'Customer paid us' : 'We paid customer'}`,
     `Scope: ${payment.scope === 'sale' ? 'Sell' : 'Buy'}`,
     `Source invoice: ${payment.invoice_number || 'N/A'}`,
-    `Amount: ${Number(payment.amount || 0).toLocaleString()}`,
+    `Amount: ${sanitizeMoney(payment.amount || 0).toLocaleString()}`,
     `Date: ${payment.created_at ? new Date(payment.created_at).toLocaleString() : 'N/A'}`,
     `Notes: ${payment.notes || 'N/A'}`,
   ];
@@ -192,7 +193,7 @@ export default function ClientPaymentsPage() {
     return getClientPayments(client, clientPayments)
       .map((payment) => ({
         ...payment,
-        amount: Number(payment.amount || 0),
+        amount: sanitizeMoney(payment.amount || 0),
       }))
       .sort((left, right) => new Date(right.created_at || 0).getTime() - new Date(left.created_at || 0).getTime());
   }, [client, clientPayments]);
@@ -237,7 +238,7 @@ export default function ClientPaymentsPage() {
     const payment = {
       client_id: client.id,
       client_name: client.name,
-      direction: scope === 'sale' ? 'incoming' : 'outgoing',
+      direction: (scope === 'sale' ? 'incoming' : 'outgoing') as 'incoming' | 'outgoing',
       scope,
       invoice_id: row.id,
       invoice_number: row.invoiceNumber,
@@ -466,9 +467,9 @@ export default function ClientPaymentsPage() {
                         {row.createdAt ? new Date(row.createdAt).toLocaleString() : 'N/A'}
                       </td>
                       <td className="px-4 py-4 text-gray-700">{getWarehouseName(row.warehouseId)}</td>
-                      <td className="px-4 py-4 text-right font-bold text-gray-900">${row.totalAmount.toLocaleString()}</td>
-                      <td className="px-4 py-4 text-right font-semibold text-emerald-700">${row.paidAmount.toLocaleString()}</td>
-                      <td className="px-4 py-4 text-right font-semibold text-rose-700">${row.remainingAmount.toLocaleString()}</td>
+                      <td className="px-4 py-4 text-right font-bold text-gray-900">${sanitizeMoney(row.totalAmount).toLocaleString()}</td>
+                      <td className="px-4 py-4 text-right font-semibold text-emerald-700">${sanitizeMoney(row.paidAmount).toLocaleString()}</td>
+                      <td className="px-4 py-4 text-right font-semibold text-rose-700">${sanitizeMoney(row.remainingAmount).toLocaleString()}</td>
                       <td className="px-4 py-4">
                         <PaymentStatusBadge status={row.paymentStatus} />
                       </td>
@@ -592,19 +593,19 @@ export default function ClientPaymentsPage() {
         <div className="grid gap-4 border-b border-gray-100 px-8 py-6 md:grid-cols-4">
           <div className="rounded-2xl bg-emerald-50 p-4">
             <p className="text-xs font-bold uppercase tracking-widest text-emerald-700">Customer Owes Us</p>
-            <p className="mt-2 text-2xl font-black text-emerald-900">${summary.customer_owes_us.toLocaleString()}</p>
+            <p className="mt-2 text-2xl font-black text-emerald-900">${sanitizeMoney(summary.customer_owes_us).toLocaleString()}</p>
           </div>
           <div className="rounded-2xl bg-amber-50 p-4">
             <p className="text-xs font-bold uppercase tracking-widest text-amber-700">We Owe Customer</p>
-            <p className="mt-2 text-2xl font-black text-amber-900">${summary.we_owe_customer.toLocaleString()}</p>
+            <p className="mt-2 text-2xl font-black text-amber-900">${sanitizeMoney(summary.we_owe_customer).toLocaleString()}</p>
           </div>
           <div className="rounded-2xl bg-violet-50 p-4">
             <p className="text-xs font-bold uppercase tracking-widest text-violet-700">Incoming Payments</p>
-            <p className="mt-2 text-2xl font-black text-violet-900">${summary.paid_amount.toLocaleString()}</p>
+            <p className="mt-2 text-2xl font-black text-violet-900">${sanitizeMoney(summary.paid_amount).toLocaleString()}</p>
           </div>
           <div className="rounded-2xl bg-sky-50 p-4">
             <p className="text-xs font-bold uppercase tracking-widest text-sky-700">Outgoing Payments</p>
-            <p className="mt-2 text-2xl font-black text-sky-900">${summary.outgoing_paid_amount.toLocaleString()}</p>
+            <p className="mt-2 text-2xl font-black text-sky-900">${sanitizeMoney(summary.outgoing_paid_amount).toLocaleString()}</p>
           </div>
         </div>
       </div>
@@ -671,7 +672,7 @@ export default function ClientPaymentsPage() {
                     </td>
                     <td className="px-4 py-4 text-gray-700">{payment.scope === 'sale' ? 'Sell' : 'Buy'}</td>
                     <td className="px-4 py-4 text-gray-700">{payment.invoice_number || 'N/A'}</td>
-                    <td className="px-4 py-4 text-right font-bold text-gray-900">${payment.amount.toLocaleString()}</td>
+                    <td className="px-4 py-4 text-right font-bold text-gray-900">${sanitizeMoney(payment.amount).toLocaleString()}</td>
                     <td className="px-4 py-4 text-gray-600">{payment.notes || 'N/A'}</td>
                     <td className="px-4 py-4">
                       <div className="flex justify-end gap-2">
