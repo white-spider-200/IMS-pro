@@ -1,13 +1,12 @@
-import React, { useState, useEffect, useMemo } from 'react';
-import { db } from '../firebase';
-import { collection, onSnapshot, query, where, orderBy, limit } from 'firebase/firestore';
-import { 
-  DollarSign, 
-  BarChart3, 
-  AlertTriangle, 
-  CheckCircle2, 
-  Clock, 
-  TrendingUp, 
+import React, { useMemo } from 'react';
+import { useOutletContext } from 'react-router-dom';
+import {
+  DollarSign,
+  BarChart3,
+  AlertTriangle,
+  CheckCircle2,
+  Clock,
+  TrendingUp,
   TrendingDown,
   Package,
   Activity,
@@ -15,13 +14,13 @@ import {
   Warehouse as WarehouseIcon
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { 
-  BarChart, 
-  Bar, 
-  XAxis, 
-  YAxis, 
-  CartesianGrid, 
-  Tooltip, 
+import {
+  BarChart,
+  Bar,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
   ResponsiveContainer,
   Legend,
   Cell,
@@ -30,82 +29,24 @@ import {
 } from 'recharts';
 import { toast } from 'sonner';
 import { cn } from '../lib/utils';
-import { 
-  Warehouse, 
-  ProductVariant, 
-  InventoryBalance, 
-  Reservation, 
+import {
+  Warehouse,
+  ProductVariant,
+  InventoryBalance,
+  Reservation,
   StockMovement,
   Backorder
 } from '../types';
-import { seedBigData } from '../lib/seed';
-import { Plus } from 'lucide-react';
-
 export default function AdminDashboard() {
-  const [warehouses, setWarehouses] = useState<Warehouse[]>([]);
-  const [variants, setVariants] = useState<ProductVariant[]>([]);
-  const [balances, setBalances] = useState<InventoryBalance[]>([]);
-  const [reservations, setReservations] = useState<Reservation[]>([]);
-  const [movements, setMovements] = useState<StockMovement[]>([]);
-  const [backorders, setBackorders] = useState<Backorder[]>([]);
-  const [loading, setLoading] = useState(true);
-
-  const handleBigSeed = async () => {
-    const loadingToast = toast.loading('Seeding large data batch...');
-    try {
-      await seedBigData();
-      toast.dismiss(loadingToast);
-      toast.success('Large data batch seeded successfully');
-    } catch (error) {
-      console.error(error);
-      toast.dismiss(loadingToast);
-      toast.error('Big seeding failed');
-    }
-  };
-
-  useEffect(() => {
-    setLoading(true);
-    const handleError = (err: any) => {
-      console.error(err);
-      toast.error('Failed to sync admin data');
-    };
-
-    const unsubWarehouses = onSnapshot(collection(db, 'warehouses'), (s) => {
-      setWarehouses(s.docs.map(d => ({ id: d.id, ...d.data() } as Warehouse)));
-    }, handleError);
-
-    const unsubVariants = onSnapshot(collection(db, 'product_variants'), (s) => {
-      setVariants(s.docs.map(d => ({ id: d.id, ...d.data() } as ProductVariant)));
-    }, handleError);
-
-    const unsubBalances = onSnapshot(collection(db, 'inventory_balances'), (s) => {
-      setBalances(s.docs.map(d => ({ id: d.id, ...d.data() } as InventoryBalance)));
-    }, handleError);
-
-    const unsubReservations = onSnapshot(collection(db, 'reservations'), (s) => {
-      setReservations(s.docs.map(d => ({ id: d.id, ...d.data() } as Reservation)));
-    }, handleError);
-
-    const ninetyDaysAgo = new Date();
-    ninetyDaysAgo.setDate(ninetyDaysAgo.getDate() - 90);
-    const unsubMovements = onSnapshot(query(collection(db, 'stock_movements'), where('timestamp', '>=', ninetyDaysAgo.toISOString())), (s) => {
-      setMovements(s.docs.map(d => ({ id: d.id, ...d.data() } as StockMovement)));
-    }, handleError);
-
-    const unsubBackorders = onSnapshot(collection(db, 'backorders'), (s) => {
-      setBackorders(s.docs.map(d => ({ id: d.id, ...d.data() } as Backorder)));
-      setLoading(false);
-    }, handleError);
-
-    return () => {
-      unsubWarehouses();
-      unsubVariants();
-      unsubBalances();
-      unsubReservations();
-      unsubMovements();
-      unsubBackorders();
-    };
-  }, []);
+  const ctx = useOutletContext<any>() || {};
+  const warehouses: any[] = ctx.warehouses || [];
+  const variants: any[] = ctx.variants || [];
+  const balances: any[] = ctx.balances || [];
+  const movements: any[] = ctx.movements || [];
+  const loading: boolean = ctx.loading ?? false;
+  // reservations and backorders not in context — default empty (not used in current metrics)
+  const reservations: any[] = [];
+  const backorders: any[] = [];
 
   // 1. Total Inventory Value
   const totalValue = useMemo(() => {
@@ -143,7 +84,7 @@ export default function AdminDashboard() {
     sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
     const recentRes = reservations.filter(r => new Date(r.created_at) >= sevenDaysAgo);
     const recentBO = backorders.filter(b => new Date(b.created_at) >= sevenDaysAgo);
-    
+
     const totalOrders = recentRes.length + recentBO.length;
     const fullyReserved = recentRes.filter(r => r.status === 'committed').length;
     const failed = recentBO.length;
@@ -163,7 +104,7 @@ export default function AdminDashboard() {
     const thirtyDaysAgo = new Date();
     thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
     const recentIssues = movements.filter(m => m.movement_type === 'issue' && new Date(m.timestamp) >= thirtyDaysAgo);
-    
+
     const variantStats = variants.map(v => {
       const vIssues = recentIssues.filter(m => m.variant_id === v.id);
       const totalIssued = vIssues.reduce((acc, m) => acc + m.quantity, 0);
@@ -181,7 +122,7 @@ export default function AdminDashboard() {
   const slowMoving = useMemo(() => {
     const ninetyDaysAgo = new Date();
     ninetyDaysAgo.setDate(ninetyDaysAgo.getDate() - 90);
-    
+
     return variants.map(v => {
       const vMovements = movements.filter(m => m.variant_id === v.id && new Date(m.timestamp) >= ninetyDaysAgo);
       const currentStock = balances.filter(b => b.variant_id === v.id).reduce((acc, b) => acc + b.available_quantity, 0);
@@ -219,19 +160,10 @@ export default function AdminDashboard() {
           <h1 className="text-2xl font-bold tracking-tight">Business Overview</h1>
           <p className="text-gray-500 text-sm">Total inventory value and system-wide performance metrics. Last updated: {formatDateTime(new Date())}</p>
         </div>
-        <div className="flex items-center gap-3">
-          <button 
-            onClick={handleBigSeed}
-            className="bg-indigo-50 text-indigo-700 px-4 py-2 rounded-xl font-semibold hover:bg-indigo-100 transition-all text-sm flex items-center gap-2"
-          >
-            <Plus className="w-4 h-4" />
-            Big Seed
-          </button>
-          <div className="flex items-center gap-2 bg-white border border-gray-200 rounded-xl px-3 py-2 shadow-sm">
+        <div className="flex items-center gap-2 bg-white border border-gray-200 rounded-xl px-3 py-2 shadow-sm">
             <Activity className="w-4 h-4 text-green-500" />
             <span className="text-sm font-bold">System Online</span>
           </div>
-        </div>
       </div>
 
       {/* 1. Total Inventory Value */}
@@ -284,7 +216,7 @@ export default function AdminDashboard() {
                 <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#F3F4F6" />
                 <XAxis type="number" hide />
                 <YAxis dataKey="name" type="category" axisLine={false} tickLine={false} tick={{ fontSize: 12, fontWeight: 'bold' }} />
-                <Tooltip 
+                <Tooltip
                   formatter={(value: number) => `$${value.toLocaleString()}`}
                   contentStyle={{ borderRadius: '16px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)' }}
                 />
@@ -441,7 +373,7 @@ export default function AdminDashboard() {
                 <span className="text-xs font-bold text-indigo-500">{u.totalUnits.toLocaleString()} Units</span>
               </div>
               <div className="h-3 bg-gray-100 rounded-full overflow-hidden">
-                <motion.div 
+                <motion.div
                   initial={{ width: 0 }}
                   animate={{ width: '100%' }}
                   className="h-full rounded-full bg-indigo-500"

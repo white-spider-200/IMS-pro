@@ -3,184 +3,124 @@ import { createServer as createViteServer } from "vite";
 import path from "path";
 import net from "net";
 import { fileURLToPath } from "url";
-import { readFileSync } from "fs";
-import { initializeApp } from 'firebase/app';
-import { getFirestore, collection, query, where, getDocs, updateDoc, doc, increment, writeBatch } from 'firebase/firestore';
-import { getAuth, signInAnonymously } from 'firebase/auth';
+import { initDb, getDb, getAllRows } from "./server/db.js";
+import { sseHandler, broadcastCollection } from "./server/sse.js";
+import { requireAuth } from "./server/auth.js";
+import authRouter from "./server/routes/auth.js";
+import collectionsRouter from "./server/routes/collections.js";
+import inventoryRouter from "./server/routes/inventory.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-// Load Firebase config manually to avoid import assertion issues
-const firebaseConfig = JSON.parse(readFileSync(path.join(__dirname, 'firebase-applet-config.json'), 'utf-8'));
-
 async function findAvailablePort(preferredPort: number): Promise<number> {
   return new Promise((resolve, reject) => {
     const server = net.createServer();
-
     server.once("error", (error: NodeJS.ErrnoException) => {
-      if (error.code === "EADDRINUSE") {
-        resolve(findAvailablePort(preferredPort + 1));
-        return;
-      }
+      if (error.code === "EADDRINUSE") { resolve(findAvailablePort(preferredPort + 1)); return; }
       reject(error);
     });
-
     server.once("listening", () => {
       const address = server.address();
       const port = typeof address === "object" && address ? address.port : preferredPort;
       server.close(() => resolve(port));
     });
-
     server.listen(preferredPort, "0.0.0.0");
   });
 }
 
 async function startServer() {
+  // Initialize local SQLite database + default admin user
+  initDb();
+  console.log('[DB] SQLite database initialized at ims-pro.db');
+
   const app = express();
   const preferredPort = Number(process.env.PORT ?? "3000");
   const port = await findAvailablePort(preferredPort);
   const preferredHmrPort = Number(process.env.HMR_PORT ?? String(port + 1));
   const hmrPort = await findAvailablePort(preferredHmrPort);
 
-  // Initialize Firebase on the server
-  const firebaseApp = initializeApp(firebaseConfig);
-  const db = getFirestore(firebaseApp, firebaseConfig.firestoreDatabaseId);
-  const auth = getAuth(firebaseApp);
+  app.use(express.json({ limit: '10mb' }));
 
-  // Sign in anonymously to allow the worker to operate under security rules
-  let workerEnabled = false;
-  try {
-    const userCredential = await signInAnonymously(auth);
-    console.log('[Server] Signed in anonymously for background worker. UID:', userCredential.user.uid);
-    workerEnabled = true;
-  } catch (error: any) {
-    console.warn('[Server] Anonymous auth unavailable. Background reservation expiry worker disabled.');
-    console.warn(`[Server] Firebase auth error: ${error?.code ?? 'unknown-error'}`);
-  }
-
-  // Background Worker: Reservation Expiry
-  if (workerEnabled) {
-    setInterval(async () => {
-      try {
-        const now = new Date().toISOString();
-        const q = query(
-          collection(db, 'reservations'),
-          where('status', '==', 'active'),
-          where('expiry_timestamp', '<', now)
-        );
-        
-        try {
-          const snapshot = await getDocs(q);
-
-          if (snapshot.empty) return;
-
-          console.log(`[Worker] Expiring ${snapshot.size} reservations...`);
-          
-          for (const reservationDoc of snapshot.docs) {
-            const reservation = reservationDoc.data();
-            const batch = writeBatch(db);
-
-            // 1. Mark reservation as expired
-            batch.update(reservationDoc.ref, { status: 'expired' });
-
-            // 2. Restore stock
-            const balanceQuery = query(
-              collection(db, 'inventory_balances'),
-              where('variant_id', '==', reservation.variant_id),
-              where('warehouse_id', '==', reservation.warehouse_id)
-            );
-            
-            let balanceSnapshot;
-            try {
-              balanceSnapshot = await getDocs(balanceQuery);
-            } catch (error: any) {
-              if (error.code === 'permission-denied') {
-                console.error('[Worker Permission Denied] Querying balances:', {
-                  uid: auth.currentUser?.uid,
-                  reservationId: reservationDoc.id
-                });
-              }
-              throw error;
-            }
-            
-            if (!balanceSnapshot.empty) {
-              const balanceDoc = balanceSnapshot.docs[0];
-              batch.update(balanceDoc.ref, {
-                available_quantity: increment(reservation.quantity),
-                reserved_quantity: increment(-reservation.quantity),
-                version: increment(1),
-                last_modified: new Date().toISOString()
-              });
-            }
-
-            // 3. Log movement
-            const movementRef = doc(collection(db, 'stock_movements'));
-            batch.set(movementRef, {
-              variant_id: reservation.variant_id,
-              warehouse_id: reservation.warehouse_id,
-              movement_type: 'adjustment',
-              quantity: reservation.quantity,
-              idempotency_key: `expiry_${reservationDoc.id}`,
-              source_reference: reservation.order_reference,
-              timestamp: new Date().toISOString(),
-              notes: `Reservation ${reservationDoc.id} expired`,
-              status: 'completed'
-            });
-
-            try {
-              await batch.commit();
-            } catch (error: any) {
-              if (error.code === 'permission-denied') {
-                console.error('[Worker Permission Denied] Committing batch:', {
-                  uid: auth.currentUser?.uid,
-                  reservationId: reservationDoc.id
-                });
-              }
-              throw error;
-            }
-          }
-        } catch (error: any) {
-          if (error.code === 'permission-denied') {
-            console.error('[Worker Permission Denied] Querying reservations:', {
-              uid: auth.currentUser?.uid,
-              isAnonymous: auth.currentUser?.isAnonymous,
-              now
-            });
-          }
-          throw error;
-        }
-      } catch (error) {
-        console.error('[Worker Error]', error);
-      }
-    }, 60000); // Run every 60 seconds
-  }
+  // SSE endpoint for real-time updates (replaces Firestore onSnapshot)
+  app.get('/api/sse', sseHandler);
 
   // API routes
-  app.get("/api/health", (req, res) => {
-    res.json({ status: "ok" });
-  });
+  app.use('/api/auth', authRouter);
+  app.use('/api/collections', collectionsRouter);
+  app.use('/api/inventory', inventoryRouter);
+
+  // Health check
+  app.get('/api/health', (req, res) => res.json({ status: 'ok', db: 'sqlite' }));
+
+  // Background Worker: Reservation Expiry (runs every 60 seconds)
+  setInterval(() => {
+    try {
+      const db = getDb();
+      const now = new Date().toISOString();
+      const expired = db.prepare(
+        `SELECT * FROM reservations WHERE status = 'active' AND expiry_timestamp < ?`
+      ).all(now) as any[];
+
+      if (expired.length === 0) return;
+      console.log(`[Worker] Expiring ${expired.length} reservation(s)...`);
+
+      for (const reservation of expired) {
+        db.transaction(() => {
+          db.prepare(`UPDATE reservations SET status = 'expired' WHERE id = ?`).run(reservation.id);
+
+          const balance = db.prepare(
+            `SELECT * FROM inventory_balances WHERE variant_id = ? AND warehouse_id = ?`
+          ).get(reservation.variant_id, reservation.warehouse_id) as any;
+
+          if (balance) {
+            db.prepare(`
+              UPDATE inventory_balances
+              SET available_quantity = available_quantity + ?,
+                  reserved_quantity = MAX(0, reserved_quantity - ?),
+                  version = version + 1,
+                  last_modified = ?
+              WHERE variant_id = ? AND warehouse_id = ?
+            `).run(reservation.quantity, reservation.quantity, now, reservation.variant_id, reservation.warehouse_id);
+          }
+
+          db.prepare(`
+            INSERT INTO stock_movements
+              (id, variant_id, warehouse_id, movement_type, quantity, idempotency_key, source_reference, notes, status, timestamp)
+            VALUES (?, ?, ?, 'adjustment', ?, ?, ?, ?, 'completed', ?)
+          `).run(
+            crypto.randomUUID(), reservation.variant_id, reservation.warehouse_id,
+            reservation.quantity, `expiry_${reservation.id}`,
+            reservation.order_reference, `Reservation ${reservation.id} expired`, now
+          );
+        })();
+      }
+
+      // Broadcast updated collections
+      broadcastCollection('reservations', getAllRows('reservations'));
+      broadcastCollection('inventory_balances', getAllRows('inventory_balances'));
+      broadcastCollection('stock_movements', getAllRows('stock_movements'));
+    } catch (error) {
+      console.error('[Worker Error]', error);
+    }
+  }, 60_000);
 
   // Vite middleware for development
   if (process.env.NODE_ENV !== "production") {
     const vite = await createViteServer({
-      server: {
-        middlewareMode: true,
-        hmr: { port: hmrPort },
-      },
+      server: { middlewareMode: true, hmr: { port: hmrPort } },
       appType: "spa",
     });
     app.use(vite.middlewares);
   } else {
     const distPath = path.join(process.cwd(), 'dist');
     app.use(express.static(distPath));
-    app.get('*', (req, res) => {
-      res.sendFile(path.join(distPath, 'index.html'));
-    });
+    app.get('*', (req, res) => res.sendFile(path.join(distPath, 'index.html')));
   }
 
   app.listen(port, "0.0.0.0", () => {
     console.log(`Server running on http://localhost:${port}`);
+    console.log(`Login: admin@ims.local / admin123`);
   });
 }
 

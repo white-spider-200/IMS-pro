@@ -53,7 +53,7 @@
             "state": {
               "type": "search",
               "state": {
-                "query": "",
+                "query": "tag:#react",
                 "matchingCase": false,
                 "explainSearch": false,
                 "collapseAll": false,
@@ -74,7 +74,8 @@
               "title": "Bookmarks"
             }
           }
-        ]
+        ],
+        "currentTab": 1
       }
     ],
     "direction": "horizontal",
@@ -184,5 +185,42 @@
     }
   },
   "active": "8a72256a2ee716a6",
-  "lastOpenFiles": []
+  "lastOpenFiles": [
+    "test_db.cjs",
+    "test_db.js",
+    "GEMINI.md",
+    "ims-pro.db-shm",
+    "ims-pro.db-wal",
+    "ims-pro.db-journal",
+    "ims-pro.db",
+    "IMS-Pro-Architecture.md",
+    "src/lib/useSSE.ts",
+    "src/lib/localAuth.ts",
+    "src/lib/api.ts",
+    "server/routes/inventory.ts",
+    "server/routes/collections.ts",
+    "node_modules/@types/better-sqlite3/README.md",
+    "node_modules/@types/bcryptjs/README.md",
+    "node_modules/@types/ms/README.md",
+    "node_modules/@types/jsonwebtoken/README.md",
+    "node_modules/better-sqlite3/README.md",
+    "node_modules/node-abi/node_modules/semver/README.md",
+    "node_modules/jsonwebtoken/node_modules/semver/README.md",
+    "node_modules/readable-stream/README.md",
+    "node_modules/readable-stream/GOVERNANCE.md",
+    "node_modules/readable-stream/CONTRIBUTING.md",
+    "node_modules/minimist/README.md",
+    "node_modules/tar-fs/README.md",
+    "node_modules/minimist/CHANGELOG.md",
+    "node_modules/bcryptjs/README.md",
+    "node_modules/jsonwebtoken/README.md",
+    "node_modules/bl/README.md",
+    "node_modules/bl/LICENSE.md",
+    "node_modules/prebuild-install/README.md",
+    "node_modules/prebuild-install/CONTRIBUTING.md",
+    "node_modules/prebuild-install/CHANGELOG.md",
+    "node_modules/tar-stream/README.md",
+    "node_modules/buffer/README.md",
+    "node_modules/file-uri-to-path/History.md"
+  ]
 }

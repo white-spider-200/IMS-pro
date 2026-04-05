@@ -1,6 +1,4 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { db } from '../../firebase';
-import { collection, query, where, onSnapshot, orderBy, limit } from 'firebase/firestore';
 import { 
   AlertCircle, 
   CheckCircle2, 
@@ -39,72 +37,7 @@ export default function WarehouseStaffDashboard({ warehouseId }: WarehouseStaffD
     });
   }, [balances, variants]);
 
-  useEffect(() => {
-    if (!warehouseId) return;
-
-    setLoading(true);
-
-    // 1. Fetch Variants for lookup
-    const unsubVariants = onSnapshot(collection(db, 'product_variants'), (s) => {
-      const vMap: Record<string, ProductVariant> = {};
-      s.docs.forEach(d => vMap[d.id] = { id: d.id, ...d.data() } as ProductVariant);
-      setVariants(vMap);
-    });
-
-    // 2. Tasks Queue (Pending Movements)
-    const qTasks = query(
-      collection(db, 'stock_movements'),
-      where('warehouse_id', '==', warehouseId),
-      where('status', 'in', ['pending_qc', 'pending_inspection', 'in_transit']),
-      orderBy('timestamp', 'desc')
-    );
-    const unsubTasks = onSnapshot(qTasks, (s) => {
-      setTasks(s.docs.map(d => ({ id: d.id, ...d.data() } as StockMovement)));
-    });
-
-    // 3. Today's Movements
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    const qMovements = query(
-      collection(db, 'stock_movements'),
-      where('warehouse_id', '==', warehouseId),
-      where('timestamp', '>=', today.toISOString()),
-      orderBy('timestamp', 'desc')
-    );
-    const unsubMovements = onSnapshot(qMovements, (s) => {
-      setMovements(s.docs.map(d => ({ id: d.id, ...d.data() } as StockMovement)));
-    });
-
-    // 4. Active Reservations (Expiring Soon)
-    const qReservations = query(
-      collection(db, 'reservations'),
-      where('warehouse_id', '==', warehouseId),
-      where('status', '==', 'active'),
-      orderBy('expiry_timestamp', 'asc'),
-      limit(10)
-    );
-    const unsubReservations = onSnapshot(qReservations, (s) => {
-      setReservations(s.docs.map(d => ({ id: d.id, ...d.data() } as Reservation)));
-    });
-
-    // 5. Balances
-    const qBalances = query(
-      collection(db, 'inventory_balances'),
-      where('warehouse_id', '==', warehouseId)
-    );
-    const unsubBalances = onSnapshot(qBalances, (s) => {
-      setBalances(s.docs.map(d => ({ id: d.id, ...d.data() } as InventoryBalance)));
-      setLoading(false);
-    });
-
-    return () => {
-      unsubVariants();
-      unsubTasks();
-      unsubMovements();
-      unsubReservations();
-      unsubBalances();
-    };
-  }, [warehouseId]);
+  // Data provided via outlet context
 
   const getTimeRemaining = (expiry: string) => {
     const diff = new Date(expiry).getTime() - new Date().getTime();

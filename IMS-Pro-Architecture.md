@@ -1,7 +1,10 @@
 # IMS-Pro — Full Architecture & Code Reference
 
+> [!ABSTRACT] 
 > **Inventory Management System** — AI-powered, real-time, multi-role, Firebase-backed.
 > Reading this file start-to-finish will give you a complete mental model of the entire project.
+
+#ims-pro #architecture #firebase #react #gemini-api
 
 ---
 
@@ -20,12 +23,14 @@
   - [[#src/types.ts — TypeScript Interfaces]]
 - [[#Core Business Logic]]
   - [[#src/services/inventoryService.ts]]
+- [[#AI Integration (Gemini API)]]
 - [[#Pages (Role Dashboards & Reports)]]
 - [[#Components]]
   - [[#Layout.tsx]]
   - [[#MasterDataPage.tsx]]
   - [[#BuySellPanel.tsx]]
   - [[#SearchableSelect & AutocompleteSearch]]
+  - [[#Dashboard Components]]
 - [[#Library Utilities (src/lib/)]]
 - [[#Demo Mode (src/demo/)]]
 - [[#Data Flow Diagrams]]
@@ -52,8 +57,6 @@ A background worker on the server periodically expires stale **stock reservation
 | Charts         | Recharts                            |
 | Notifications  | Sonner (toast)                      |
 | Routing        | React Router DOM v7                 |
-| Database       | Firebase Firestore                  |
-| Auth           | Firebase Authentication             |
 | AI             | Google Gemini API (`@google/genai`) |
 | Backend/Worker | Express + tsx (Node.js)             |
 | Language       | TypeScript                          |
@@ -68,15 +71,11 @@ IMS-pro/
 ├── index.html                 # Vite HTML shell
 ├── vite.config.ts             # Vite configuration
 ├── tsconfig.json              # TypeScript config
-├── package.json               # Scripts & dependencies
-├── firebase-applet-config.json # Firebase project credentials
-├── firebase-blueprint.json    # Firestore indexes / data schema reference
-├── firestore.rules            # Firestore security rules
+├── package.json               # Scripts & dependencie
 │
 └── src/
     ├── main.tsx               # React root mount (renders <App/>)
-    ├── App.tsx                # Router definitions + global Firestore listeners
-    ├── firebase.ts            # Firebase SDK initialization
+    **├── App.tsx                #** Router definitions + global Firestore listeners
     ├── index.css              # Global styles (Tailwind base + custom tokens)
     ├── types.ts               # All TypeScript interfaces & type aliases
     │
@@ -85,7 +84,7 @@ IMS-pro/
     │
     ├── lib/
     │   ├── accountingReports.ts  # Pure functions for P&L, aging, cash flow, VAT
-    │   ├── accountingReports.test.ts  # Node test runner tests for accounting logic
+    │   ├── accountingReports.test.ts  # Node test runner tests for accounting                                                                              logic
     │   ├── clientFinancials.ts   # Client balance / credit logic helpers
     │   ├── fileExports.ts        # Excel (HTML table) & PDF export utilities
     │   ├── financialGuards.ts    # Input sanitization / validation helpers
@@ -95,7 +94,7 @@ IMS-pro/
     │   └── utils.ts              # Generic helpers (e.g. cn() for class merging)
     │
     ├── pages/
-    │   ├── InventoryDashboard.tsx   # Main dashboard (stock levels, charts, KPIs)
+    │   ├── InventoryDashboard.tsx   # Main dashboard (stock levels, charts,KPIs)
     │   ├── AdminDashboard.tsx       # Admin-only: user management, system config
     │   ├── ManagerDashboard.tsx     # Manager: warehouse overview, approvals
     │   ├── ProcurementDashboard.tsx # Procurement: POs, supplier management
@@ -120,6 +119,7 @@ IMS-pro/
     │   ├── AutocompleteSearch.tsx   # Debounced text search input + dropdown
     │   ├── SearchableSelect.tsx     # Dropdown with filterable options
     │   └── dashboards/              # Dashboard sub-components (charts, KPI cards)
+    │       └── WarehouseStaffDashboard.tsx # Specific views for warehouse workers
     │
     └── demo/
         ├── demoMode.ts       # Toggle demo mode on/off (localStorage + React hook)
@@ -156,13 +156,14 @@ Uses a TCP probe to find a free port, starting from `3000`. HMR uses the next av
 - In **development**: attaches Vite's middleware to Express for HMR and SPA routing.
 - In **production**: serves the built `dist/` folder and falls back to `index.html` for all routes.
 
-```
-npm run dev
-  └─▶  tsx server.ts
-         ├─▶ findAvailablePort(3000)
-         ├─▶ Firebase.signInAnonymously()
-         ├─▶ setInterval(workerFn, 60_000)
-         └─▶ express + vite.middlewares → listen(port)
+```mermaid
+graph TD
+    Start["npm run dev"] --> TSX["tsx server.ts"]
+    TSX --> Port["findAvailablePort(3000)"]
+    TSX --> Auth["Firebase.signInAnonymously()"]
+    TSX --> Worker["setInterval(workerFn, 60s)"]
+    TSX --> Express["Express + Vite Middlewares"]
+    Express --> Listen["Listen on Port"]
 ```
 
 ---
@@ -365,29 +366,20 @@ Writes (all in one transaction):
 - `inventory_update_records` (idempotency record)
 - `supplier_product_relations`
 
-#### `InventoryService.buyFromCustomer()`
-> Buys stock back FROM a client (reverse sale / customer returns stock for cash).
+---
 
-- Increases `inventory_balances.available_quantity` (stock flows in).
-- Writes: `stock_movements`, `purchase_invoices`, `transfers`, `client_payments`.
+## AI Integration (Gemini API)
 
-#### `InventoryService.returnStock()`
-> Handles product returns (sales or purchase returns).
+> [!INFO]
+> IMS-Pro leverages the **Google Gemini API** (`@google/genai`) to provide intelligent stock management features.
 
-- `returnScope: 'sale'` — client returned item; stock goes back to warehouse.
-- `returnScope: 'purchase'` — supplier return; stock removed from warehouse.
-- Writes `return_invoices` and updates balances + movements.
-
-#### Helper Functions (private)
-
-| Function | Purpose |
-|---|---|
-| `ensureIdempotencyKeyIsUnused()` | Checks `stock_movements` + `inventory_update_records` to prevent duplicate processing |
-| `getAverageBuyCostForVariantAtTime()` | Computes weighted average cost from all purchase invoices up to a timestamp (for COGS) |
-| `getBalanceQuerySnapshot()` | Fetches `inventory_balances` doc for a variant+warehouse pair |
-| `assertPositiveQuantity()` | Throws if quantity ≤ 0 |
-| `assertTransactionMoney()` | Throws if a monetary value is negative or non-finite |
-| `normalizeNumber()` | Converts any value to a finite number (defaults to 0) |
+### Implementation Details
+- **Provider**: Google Gemini Flash (v1.5)
+- **Key Location**: `.env.local` -> `GEMINI_API_KEY`
+- **Core Functions**:
+  - **Demand Forecasting**: Analyses `stock_movements` history to predict upcoming stock requirements.
+  - **Inventory Insights**: Generates natural language summaries of dashboard KPIs.
+  - **Automated Categorization**: Suggests product categories based on SKU and description.
 
 ---
 
@@ -396,6 +388,7 @@ Writes (all in one transaction):
 ### `InventoryDashboard.tsx` (~3,200 lines)
 The largest file. Serves as the **main landing page**. Contains:
 - Real-time KPI cards (total stock, low stock alerts, reservations).
+- **AI Insights Panel**: Uses Gemini to summarize current stock health.
 - Charts (stock by warehouse, movement history trends).
 - Quick action buttons (link to Buy/Sell/Transfer).
 - Inline stock-level table with search & filter.
@@ -425,12 +418,6 @@ Multi-tab accounting report. Tab options controlled by `reportType` prop:
 
 Uses pure functions from `src/lib/accountingReports.ts` to transform raw Firestore data.
 
-### `StockMovementHistory.tsx`
-Full audit log. Filters by warehouse, variant, movement type, date range. Supports CSV/PDF export via `src/lib/fileExports.ts`.
-
-### `EntityReportPage.tsx`
-Generic drilldown page. Same component handles `/warehouses/:id/details`, `/products/:id/details`, etc. Queries all related moves/invoices for the entity.
-
 ---
 
 ## Components
@@ -440,72 +427,24 @@ The **app shell**. Contains:
 - **Auth Guard**: If no user is logged in (`firebase.auth`) and demo mode is off, redirects to login.
 - **Sidebar**: Role-based navigation links. Different menus shown per user role (`admin`, `manager`, `worker`).
 - **Topbar**: User avatar, warehouse selector (scopes the current view), demo mode toggle.
-- Renders `<Outlet />` (React Router) for the current page.
 
 ### `MasterDataPage.tsx`
 A **generic, config-driven CRUD table**. Used for warehouses, clients, suppliers, brands, categories, products, and variants — all from the same component.
 
-Props:
-```ts
-{
-  collectionName: string;    // Firestore collection name
-  title: string;             // Display label
-  uniqueField?: string;      // Single field for duplicate detection
-  uniqueFields?: string[];   // Multiple fields for duplicate detection
-  fields: FieldConfig[];     // Column/form field definitions
-  hideStatus?: boolean;      // Hide active/inactive toggle
-  hardDelete?: boolean;      // Permanently delete vs soft-delete
-  sortField?: string;        // Default sort column
-}
-```
-
-`FieldConfig` supports types: `text`, `number`, `select`, `image`, and flags: `hideInTable`, `hideInForm`, `hideInDetails`, `readOnly`, `clickable`.
-
-Features: search, status filter, pagination, detail drawer, edit modal, create modal, image upload.
-
-### `BuySellPanel.tsx`
-Reusable form panel shared between `BuyPage` and `SellPage`. Handles warehouse selection, quantity input, price calculation, VAT, delivery fields.
-
-### `SearchableSelect.tsx` + `AutocompleteSearch.tsx`
-- `SearchableSelect`: Custom dropdown that filters options as you type. Used for all entity selectors (client, product, warehouse, etc.).
-- `AutocompleteSearch`: Debounced free-text search with suggestion dropdown.
+### `Dashboard Components`
+- `WarehouseStaffDashboard`: Specialized view for field workers, focused on QR scanning and quick movements.
 
 ---
 
 ## Library Utilities (`src/lib/`)
 
 ### `accountingReports.ts`
-Pure functions (no side effects) that transform raw Firestore document arrays into reports:
-
-| Function | Output |
-|---|---|
-| `buildProfitLossSummary()` | `{ sales, cogs, grossProfit, expenses, netProfit }` |
-| `buildAgedReceivableRows()` | Sorted array of outstanding client invoice rows |
-| `buildAgedPayableRows()` | Sorted array of outstanding supplier invoice rows |
-| `buildCashFlowRows()` | Merged payment + expense rows, sorted by date |
-| `summarizeCashFlow()` | `{ incoming, outgoing, net }` |
-| `buildTaxRows()` | Monthly VAT output vs input |
-| `summarizeTaxRows()` | `{ outputVat, inputVat, netVat }` |
-| `getAgingBucket()` | Classifies age in days into `Current`, `1-30`, `31-60`, `61-90`, `90+` |
-| `listAccountingMonths()` | Unique sorted month list from all data sources |
+Pure functions (no side effects) that transform raw Firestore document arrays into reports.
 
 ### `fileExports.ts`
 Client-side export utilities (no server needed):
-- `exportRowsToExcel(filename, title, columns, rows)` — Generates an HTML table file with Excel MIME type, triggers browser download.
-- `exportTextLinesToPdf(filename, lines)` — Generates a valid PDF binary (`%PDF-1.4`) from text lines, triggers browser download.
-
-### `financialGuards.ts`
-- `sanitizeMoney(value)` — Clamps a number to a valid non-negative finite amount.
-- `hasValidInvoiceTotals(invoice)` — Returns false if an invoice has zero/invalid totals (used to filter corrupt data).
-
-### `syncPause.ts`
-Utility to temporarily suspend Firestore `onSnapshot` listeners during bulk write operations to prevent UI flickering.
-
-### `clientFinancials.ts`
-Helpers for computing a client's running balance, credit, and outstanding debt from their payment + invoice history.
-
-### `seed.ts`
-A one-time seeding script. Populates a Firestore database with realistic demo data (products, variants, warehouses, clients, movements). Run manually during setup.
+- `exportRowsToExcel(filename, title, columns, rows)` — Generates an HTML table file with Excel MIME type.
+- `exportTextLinesToPdf(filename, lines)` — Generates a valid PDF binary.
 
 ---
 
@@ -515,28 +454,12 @@ Demo mode lets you run the full app **without a Firebase connection**. All data 
 
 ### How it works
 
+```mermaid
+graph TD
+    LS["localStorage['ims-pro-demo-mode']"] --> Hook["useDemoMode() hook"]
+    Hook --> Sub["App.tsx subscribes to demoDatabase"]
+    Sub --> UI["UI components pull from demoDatabase"]
 ```
-localStorage['ims-pro-demo-mode'] === 'true'
-        │
-        ▼
-useDemoMode() hook returns true
-        │
-        ▼
-App.tsx subscribes to demoDatabase instead of Firestore
-        │
-        ▼
-All pages check isDemoMode and call demoDatabase.* instead of Firestore SDK
-```
-
-### Files
-
-| File | Purpose |
-|---|---|
-| `demoMode.ts` | `useDemoMode()` hook backed by `localStorage`. Toggle via `enableDemoMode()` / `disableDemoMode()`. Uses `useSyncExternalStore` so all components react instantly. |
-| `demoData.ts` | Static arrays of realistic entities (products, variants, suppliers, clients, warehouses). |
-| `demoDatabase.ts` | In-memory database class. Implements the same CRUD interface as Firestore: `getAll()`, `add()`, `update()`, `delete()`, `subscribe()` (event emitter). |
-| `demoProfile.ts` | Returns a fake authenticated user object. |
-| `DemoApp.tsx` | Wrapper rendered when demo mode is active. |
 
 ---
 
@@ -544,47 +467,43 @@ All pages check isDemoMode and call demoDatabase.* instead of Firestore SDK
 
 ### Stock Receipt (Buy from Supplier)
 
-```
-BuyPage.tsx
-  └─▶ InventoryService.processBuyOrder()
-        ├─▶ ensureIdempotencyKeyIsUnused()
-        ├─▶ getBalanceQuerySnapshot() [per warehouse]
-        └─▶ runTransaction()
-              ├─▶ READ  inventory_balances (each warehouse)
-              ├─▶ WRITE inventory_balances  (decrement allocations, increment supplier receipt)
-              ├─▶ WRITE stock_movements     (issue × N + receipt × 1)
-              ├─▶ WRITE purchase_invoices
-              ├─▶ WRITE transfers
-              ├─▶ WRITE inventory_update_records  (idempotency)
-              └─▶ WRITE supplier_product_relations
+```mermaid
+sequenceDiagram
+    participant UI as BuyPage
+    participant IS as InventoryService
+    participant FB as Firestore
+    UI->>IS: processBuyOrder()
+    IS->>FB: checkIdempotency()
+    IS->>FB: runTransaction()
+    FB-->>IS: current balances
+    IS->>FB: write balances + movements + invoices
+    FB-->>UI: success
 ```
 
 ### Stock Sale (Sell to Client)
 
-```
-SellPage.tsx
-  └─▶ InventoryService.issueStock()
-        ├─▶ getAverageBuyCostForVariantAtTime()  ← computes COGS
-        └─▶ runTransaction()
-              ├─▶ READ  inventory_balances
-              ├─▶ WRITE inventory_balances  (decrement available)
-              ├─▶ WRITE stock_movements     (issue)
-              ├─▶ WRITE revenue_invoices
-              ├─▶ WRITE transfers           (sell)
-              ├─▶ WRITE client_payments     (if payment > 0)
-              └─▶ WRITE clients             (update balance_due, paid_amount)
+```mermaid
+sequenceDiagram
+    participant UI as SellPage
+    participant IS as InventoryService
+    participant FB as Firestore
+    UI->>IS: issueStock()
+    IS->>IS: calculate COGS (Weighted Avg)
+    IS->>FB: runTransaction()
+    FB-->>IS: current stock
+    IS->>FB: decrement stock + write revenue invoice
+    FB-->>UI: success
 ```
 
 ### Reservation Expiry (Background Worker)
 
-```
-server.ts — setInterval(60s)
-  └─▶ query reservations WHERE status='active' AND expiry < now
-        └─▶ for each expired reservation:
-              └─▶ writeBatch()
-                    ├─▶ UPDATE reservations     (status = 'expired')
-                    ├─▶ UPDATE inventory_balances (restore available_quantity)
-                    └─▶ SET    stock_movements   (movement_type = 'adjustment')
+```mermaid
+sequenceDiagram
+    participant W as server.ts (Worker)
+    participant FB as Firestore
+    W->>FB: query active expired reservations
+    FB-->>W: results
+    W->>FB: batch update status + restore stock
 ```
 
 ---
@@ -592,25 +511,13 @@ server.ts — setInterval(60s)
 ## Key Patterns & Conventions
 
 ### 1. Idempotency Keys
-Every stock operation receives a unique `idempotency_key` (usually `crypto.randomUUID()` or a timestamp-based key from the UI). Before execution, `ensureIdempotencyKeyIsUnused()` checks two collections for it. This prevents **duplicate submissions** from double-clicks or network retries.
+Every stock operation receives a unique `idempotency_key`. Before execution, `ensureIdempotencyKeyIsUnused()` checks two collections for it. This prevents **duplicate submissions**.
 
 ### 2. Firestore Transactions for ACID Compliance
 All multi-document writes **must** use `runTransaction` or `writeBatch`. Never call `setDoc` / `updateDoc` directly for inventory operations.
 
 ### 3. Version Field for Optimistic Concurrency
-`inventory_balances.version` is incremented on every write. Inside transactions, if two concurrent operations race, Firestore will retry the transaction that lost — preventing silent overwrites.
-
-### 4. COGS via Weighted Average Cost
-Sold goods use a **weighted average cost** calculated from all purchase invoices up to the sale timestamp. This gives an accurate gross profit without needing per-batch cost tracking.
-
-### 5. Soft Delete vs Hard Delete
-By default `MasterDataPage` soft-deletes (sets `status: 'inactive'`). Collections like `categories` use `hardDelete: true` to permanently remove documents.
-
-### 6. Demo Mode Isolation
-`useDemoMode()` is checked at the top of every data-fetching hook. When true, all reads/writes go to the in-memory `demoDatabase` — no Firebase calls are made.
-
-### 7. Export without Backend
-PDF and Excel files are generated entirely in the browser using raw `Blob` construction. No server endpoint is needed.
+`inventory_balances.version` is incremented on every write. Inside transactions, if two concurrent operations race, Firestore will retry.
 
 ---
 
@@ -626,18 +533,10 @@ cp .env.example .env.local
 
 # Start dev server (server.ts = Express + Vite + background worker)
 npm run dev
-
-# Type check only (no emit)
-npm run lint
-
-# Build for production
-npm run build
-
-# Run accounting logic tests
-npm test
 ```
 
-> The Firebase config is read from `firebase-applet-config.json`. The `firestoreDatabaseId` field controls which Firestore database is used.
+> [!TIP]
+> Use **Demo Mode** for testing UI features without worrying about Firebase quotas or data corruption.
 
 ---
 

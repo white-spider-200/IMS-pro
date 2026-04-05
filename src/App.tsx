@@ -15,22 +15,60 @@ import WarehouseExpensesPage from './pages/WarehouseExpensesPage';
 import CogsReportPage from './pages/CogsReportPage';
 import NetProfitPage from './pages/NetProfitPage';
 import AccountingPage from './pages/AccountingPage';
-import { useState, useEffect } from 'react';
-import { db, auth } from './firebase';
-import { collection, onSnapshot } from 'firebase/firestore';
-import { onAuthStateChanged } from 'firebase/auth';
-import { toast } from 'sonner';
+import { useState, useEffect, useCallback } from 'react';
+import { api } from './lib/api';
+import { useSSE } from './lib/useSSE';
+import { getToken } from './lib/localAuth';
 import { useDemoMode } from './demo/demoMode';
 import { getDemoDatabase, subscribeDemoDatabase } from './demo/demoDatabase';
 
 export default function App() {
   const isDemoMode = useDemoMode();
+  const isLoggedIn = !!getToken();
+
   const [brands, setBrands] = useState<any[]>([]);
   const [categories, setCategories] = useState<any[]>([]);
   const [products, setProducts] = useState<any[]>([]);
   const [suppliers, setSuppliers] = useState<any[]>([]);
   const [clients, setClients] = useState<any[]>([]);
   const [users, setUsers] = useState<any[]>([]);
+
+  const fetchAll = useCallback(async () => {
+    if (isDemoMode) return;
+    if (!getToken()) return;
+    try {
+      const [b, cat, p, sup, cli, u] = await Promise.all([
+        api.collection.getAll('brands'),
+        api.collection.getAll('categories'),
+        api.collection.getAll('products'),
+        api.collection.getAll('suppliers'),
+        api.collection.getAll('clients'),
+        api.collection.getAll('users'),
+      ]);
+      setBrands(b.map((d: any) => ({ label: d.name, value: d.id })));
+      setCategories(cat.map((d: any) => ({ label: d.name, value: d.id })));
+      setProducts(p.map((d: any) => ({ label: d.name, value: d.id })));
+      setSuppliers(sup.map((d: any) => ({ label: d.name, value: d.id })));
+      setClients(cli.map((d: any) => ({ label: d.name, value: d.id })));
+      setUsers(u.map((d: any) => ({
+        label: d.displayName || d.email,
+        value: d.id,
+        email: d.email,
+        phone: d.phone,
+        displayName: d.displayName,
+      })));
+    } catch (e) {
+      console.error('Failed to fetch global data', e);
+    }
+  }, [isDemoMode]);
+
+  // SSE: re-fetch collections when relevant data changes
+  useSSE((collection) => {
+    const globalCollections = ['brands', 'categories', 'products', 'suppliers', 'clients', 'users'];
+    if (globalCollections.includes(collection)) {
+      fetchAll();
+    }
+  }, isLoggedIn && !isDemoMode);
 
   useEffect(() => {
     if (isDemoMode) {
@@ -49,69 +87,11 @@ export default function App() {
           displayName: item.displayName,
         })));
       };
-
       syncFromDemoDb();
       return subscribeDemoDatabase(syncFromDemoDb);
     }
-
-    let unsubs: (() => void)[] = [];
-
-    const unsubscribeAuth = onAuthStateChanged(auth, (user) => {
-      // Clean up previous snapshots
-      unsubs.forEach(unsub => unsub());
-      unsubs = [];
-
-      if (user) {
-        const handleError = (error: any) => {
-          console.error('Firestore snapshot error:', error);
-          toast.error('Failed to sync data with server');
-        };
-
-        unsubs.push(onSnapshot(collection(db, 'brands'),
-          (s) => setBrands(s.docs.map(d => ({ label: d.data().name, value: d.id }))),
-          handleError
-        ));
-        unsubs.push(onSnapshot(collection(db, 'categories'),
-          (s) => setCategories(s.docs.map(d => ({ label: d.data().name, value: d.id }))),
-          handleError
-        ));
-        unsubs.push(onSnapshot(collection(db, 'products'),
-          (s) => setProducts(s.docs.map(d => ({ label: d.data().name, value: d.id }))),
-          handleError
-        ));
-        unsubs.push(onSnapshot(collection(db, 'suppliers'),
-          (s) => setSuppliers(s.docs.map(d => ({ label: d.data().name, value: d.id }))),
-          handleError
-        ));
-        unsubs.push(onSnapshot(collection(db, 'clients'),
-          (s) => setClients(s.docs.map(d => ({ label: d.data().name, value: d.id }))),
-          handleError
-        ));
-        unsubs.push(onSnapshot(collection(db, 'users'),
-          (s) => setUsers(s.docs.map(d => ({
-            label: d.data().displayName || d.data().email,
-            value: d.id,
-            email: d.data().email,
-            phone: d.data().phone,
-            displayName: d.data().displayName,
-          }))),
-          handleError
-        ));
-      } else {
-        setBrands([]);
-        setCategories([]);
-        setProducts([]);
-        setSuppliers([]);
-        setClients([]);
-        setUsers([]);
-      }
-    });
-
-    return () => {
-      unsubscribeAuth();
-      unsubs.forEach(unsub => unsub());
-    };
-  }, [isDemoMode]);
+    fetchAll();
+  }, [isDemoMode, fetchAll]);
 
   const inventorySections = [
     {
@@ -250,15 +230,8 @@ export default function App() {
       ),
     },
   ];
-  const [
-    warehousesSection,
-    clientsSection,
-    suppliersSection,
-    brandsSection,
-    categoriesSection,
-    productsSection,
-    variantsSection,
-  ] = inventorySections;
+
+  const [warehousesSection, clientsSection, suppliersSection, brandsSection, categoriesSection, productsSection, variantsSection] = inventorySections;
 
   return (
     <BrowserRouter>
@@ -309,7 +282,6 @@ export default function App() {
           <Route path="/accounting/vat-summary" element={<Navigate to="/accounting/tax-report" replace />} />
 
           <Route path="/reports/movements" element={<StockMovementHistory />} />
-
           <Route path="/profile" element={<ProfilePage />} />
         </Route>
       </Routes>

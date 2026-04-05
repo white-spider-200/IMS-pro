@@ -1,10 +1,10 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate, useOutletContext } from 'react-router-dom';
-import { doc, serverTimestamp, setDoc } from 'firebase/firestore';
 import { Camera, MapPin, Phone, Save, User } from 'lucide-react';
 import { toast } from 'sonner';
-import { auth, db } from '../firebase';
 import { saveDemoProfile } from '../demo/demoProfile';
+import { api } from '../lib/api';
+import { getToken } from '../lib/localAuth';
 
 type OutletContext = {
   isDemoMode?: boolean;
@@ -68,22 +68,16 @@ export default function ProfilePage() {
         return;
       }
 
-      if (!auth.currentUser) {
+      if (!getToken()) {
         throw new Error('You must be signed in to update your profile');
       }
 
-      await setDoc(
-        doc(db, 'users', auth.currentUser.uid),
-        {
-          displayName: formData.displayName.trim() || auth.currentUser.displayName || '',
-          phone: formData.phone.trim(),
-          location: formData.location.trim(),
-          photoURL: formData.photoURL.trim(),
-          profile_completed: true,
-          last_modified: serverTimestamp(),
-        },
-        { merge: true }
-      );
+      await api.put('/auth/me', {
+        displayName: formData.displayName.trim(),
+        phone: formData.phone.trim(),
+        location: formData.location.trim(),
+        photoURL: formData.photoURL.trim(),
+      });
 
       toast.success('Profile updated successfully');
       navigate('/');

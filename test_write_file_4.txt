@@ -1,0 +1,5 @@
+# Test write inside workspace
+test = 1
+format = """
+abc
+"""

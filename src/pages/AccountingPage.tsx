@@ -4,6 +4,8 @@ import {
   BriefcaseBusiness,
   Calculator,
   Landmark,
+  ChevronDown,
+  ChevronRight,
   ReceiptText,
   Search,
   Wallet,
@@ -84,6 +86,16 @@ export default function AccountingPage({ reportType }: AccountingPageProps) {
   const [monthFilter, setMonthFilter] = useState('');
   const [warehouseFilter, setWarehouseFilter] = useState('all');
   const [searchTerm, setSearchTerm] = useState('');
+  const [expandedTaxMonths, setExpandedTaxMonths] = useState<Set<string>>(new Set());
+
+  const toggleTaxMonth = (month: string) => {
+    setExpandedTaxMonths((prev) => {
+      const next = new Set(prev);
+      if (next.has(month)) next.delete(month);
+      else next.add(month);
+      return next;
+    });
+  };
 
   const filters = useMemo(
     () => ({
@@ -230,6 +242,110 @@ export default function AccountingPage({ reportType }: AccountingPageProps) {
               <div className="rounded-2xl bg-slate-50 p-5">
                 <p className="text-xs font-bold uppercase tracking-widest text-slate-500">Net Result</p>
                 <p className="mt-3 text-3xl font-black text-slate-900">{toMoney(profitLossSummary.netProfit)}</p>
+              </div>
+            </div>
+          </div>
+
+          <div className="mt-8 space-y-6">
+            <h2 className="text-sm font-bold uppercase tracking-widest text-slate-600">Detailed P&L Ledger</h2>
+
+            <div className="overflow-hidden rounded-2xl border border-slate-100 bg-white shadow-sm">
+              <div className="border-b border-slate-100 px-6 py-4 bg-sky-50">
+                <h3 className="text-xs font-bold uppercase tracking-widest text-sky-700">Recorded Sales (Revenue)</h3>
+              </div>
+              <div className="overflow-x-auto">
+                <table className="min-w-full divide-y divide-slate-100 text-sm">
+                  <thead className="bg-slate-50">
+                    <tr>
+                      <th className="px-6 py-4 text-left font-bold uppercase tracking-widest text-slate-500">Date</th>
+                      <th className="px-6 py-4 text-left font-bold uppercase tracking-widest text-slate-500">Invoice #</th>
+                      <th className="px-6 py-4 text-left font-bold uppercase tracking-widest text-slate-500">Customer</th>
+                      <th className="px-6 py-4 text-right font-bold uppercase tracking-widest text-slate-500">Subtotal</th>
+                      <th className="px-6 py-4 text-right font-bold uppercase tracking-widest text-slate-500">COGS</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100">
+                    {salesInvoices.length === 0 ? (
+                      <tr><td colSpan={5}><EmptyState message="No sales records found for this period." /></td></tr>
+                    ) : (
+                      salesInvoices.map((inv) => (
+                        <tr key={inv.id}>
+                          <td className="px-6 py-3 text-slate-600">{new Date(inv.created_at).toLocaleDateString()}</td>
+                          <td className="px-6 py-3 font-semibold text-slate-800">{inv.invoice_number || 'Sale'}</td>
+                          <td className="px-6 py-3 text-slate-700">{inv.customer_name || 'N/A'}</td>
+                          <td className="px-6 py-3 text-right font-bold text-sky-700">{toMoney(inv.subtotal ?? inv.total_amount)}</td>
+                          <td className="px-6 py-3 text-right text-amber-700">{toMoney(inv.cogs_amount ?? 0)}</td>
+                        </tr>
+                      ))
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            <div className="overflow-hidden rounded-2xl border border-slate-100 bg-white shadow-sm">
+              <div className="border-b border-slate-100 px-6 py-4 bg-emerald-50">
+                <h3 className="text-xs font-bold uppercase tracking-widest text-emerald-700">Recorded Purchases (Buys)</h3>
+              </div>
+              <div className="overflow-x-auto">
+                <table className="min-w-full divide-y divide-slate-100 text-sm">
+                  <thead className="bg-slate-50">
+                    <tr>
+                      <th className="px-6 py-4 text-left font-bold uppercase tracking-widest text-slate-500">Date</th>
+                      <th className="px-6 py-4 text-left font-bold uppercase tracking-widest text-slate-500">Invoice #</th>
+                      <th className="px-6 py-4 text-left font-bold uppercase tracking-widest text-slate-500">Supplier/Customer</th>
+                      <th className="px-6 py-4 text-right font-bold uppercase tracking-widest text-slate-500">Subtotal</th>
+                      <th className="px-6 py-4 text-right font-bold uppercase tracking-widest text-slate-500">Total Asset Value</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100">
+                    {payableInvoices.length === 0 ? (
+                      <tr><td colSpan={5}><EmptyState message="No purchase records found. Note: Buys increase inventory (Assets) and only reflect on P&L as COGS when items are sold." /></td></tr>
+                    ) : (
+                      payableInvoices.map((inv) => (
+                        <tr key={inv.id}>
+                          <td className="px-6 py-3 text-slate-600">{new Date(inv.created_at).toLocaleDateString()}</td>
+                          <td className="px-6 py-3 font-semibold text-slate-800">{inv.invoice_number || 'Buy'}</td>
+                          <td className="px-6 py-3 text-slate-700">{inv.supplier_name || inv.customer_name || 'N/A'}</td>
+                          <td className="px-6 py-3 text-right text-slate-700">{toMoney(inv.subtotal ?? 0)}</td>
+                          <td className="px-6 py-3 text-right font-bold text-emerald-700">{toMoney(inv.total_amount ?? inv.total_cost ?? 0)}</td>
+                        </tr>
+                      ))
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            <div className="overflow-hidden rounded-2xl border border-slate-100 bg-white shadow-sm">
+              <div className="border-b border-slate-100 px-6 py-4 bg-rose-50">
+                <h3 className="text-xs font-bold uppercase tracking-widest text-rose-700">Warehouse Expenses</h3>
+              </div>
+              <div className="overflow-x-auto">
+                <table className="min-w-full divide-y divide-slate-100 text-sm">
+                  <thead className="bg-slate-50">
+                    <tr>
+                      <th className="px-6 py-4 text-left font-bold uppercase tracking-widest text-slate-500">Date/Month</th>
+                      <th className="px-6 py-4 text-left font-bold uppercase tracking-widest text-slate-500">Title</th>
+                      <th className="px-6 py-4 text-left font-bold uppercase tracking-widest text-slate-500">Category</th>
+                      <th className="px-6 py-4 text-right font-bold uppercase tracking-widest text-slate-500">Amount</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100">
+                    {filteredExpenses.length === 0 ? (
+                      <tr><td colSpan={4}><EmptyState message="No expenses found for this period." /></td></tr>
+                    ) : (
+                      filteredExpenses.map((exp) => (
+                        <tr key={exp.id}>
+                          <td className="px-6 py-3 text-slate-600">{exp.expense_date || exp.start_month || new Date(exp.created_at).toLocaleDateString()}</td>
+                          <td className="px-6 py-3 font-semibold text-slate-800">{exp.title}</td>
+                          <td className="px-6 py-3 text-slate-700">{exp.category || 'N/A'}</td>
+                          <td className="px-6 py-3 text-right font-bold text-rose-700">{toMoney(exp.amount)}</td>
+                        </tr>
+                      ))
+                    )}
+                  </tbody>
+                </table>
               </div>
             </div>
           </div>
@@ -403,14 +519,72 @@ export default function AccountingPage({ reportType }: AccountingPageProps) {
                     <tr><td colSpan={4}><EmptyState message="No VAT records found for the selected filters." /></td></tr>
                   ) : (
                     taxRows.map((row) => (
-                      <tr key={row.month}>
-                        <td className="px-6 py-4 font-semibold text-slate-900">{formatMonthLabel(row.month)}</td>
-                        <td className="px-6 py-4 text-right text-sky-700">{toMoney(row.outputVat)}</td>
-                        <td className="px-6 py-4 text-right text-emerald-700">{toMoney(row.inputVat)}</td>
-                        <td className={`px-6 py-4 text-right font-bold ${row.netVat >= 0 ? 'text-amber-700' : 'text-emerald-700'}`}>
-                          {toMoney(row.netVat)}
-                        </td>
-                      </tr>
+                      <React.Fragment key={row.month}>
+                        <tr
+                          onClick={() => toggleTaxMonth(row.month)}
+                          className="cursor-pointer hover:bg-slate-50/50 transition"
+                        >
+                          <td className="px-6 py-4 font-semibold text-slate-900 flex items-center gap-2">
+                            {expandedTaxMonths.has(row.month) ? (
+                              <ChevronDown className="h-4 w-4 text-slate-400" />
+                            ) : (
+                              <ChevronRight className="h-4 w-4 text-slate-400" />
+                            )}
+                            {formatMonthLabel(row.month)}
+                          </td>
+                          <td className="px-6 py-4 text-right text-sky-700">{toMoney(row.outputVat)}</td>
+                          <td className="px-6 py-4 text-right text-emerald-700">{toMoney(row.inputVat)}</td>
+                          <td className={`px-6 py-4 text-right font-bold ${row.netVat >= 0 ? 'text-amber-700' : 'text-emerald-700'}`}>
+                            {toMoney(row.netVat)}
+                          </td>
+                        </tr>
+                        {expandedTaxMonths.has(row.month) && (
+                          <tr>
+                            <td colSpan={4} className="bg-slate-50 p-0 border-t border-b border-slate-100">
+                              <div className="px-10 py-4 max-h-[400px] overflow-y-auto">
+                                <h3 className="text-xs font-bold uppercase tracking-widest text-slate-500 mb-3">
+                                  VAT Details for {formatMonthLabel(row.month)}
+                                </h3>
+                                {row.details.length === 0 ? (
+                                  <p className="text-sm text-slate-500 italic">No individual VAT transactions recorded for this period.</p>
+                                ) : (
+                                  <table className="min-w-full divide-y divide-slate-200">
+                                    <thead>
+                                      <tr>
+                                        <th className="py-2 text-left text-xs font-semibold uppercase text-slate-500">Date</th>
+                                        <th className="py-2 text-left text-xs font-semibold uppercase text-slate-500">Type</th>
+                                        <th className="py-2 text-left text-xs font-semibold uppercase text-slate-500">Invoice ID</th>
+                                        <th className="py-2 text-left text-xs font-semibold uppercase text-slate-500">Party</th>
+                                        <th className="py-2 text-right text-xs font-semibold uppercase text-slate-500">Total Basis</th>
+                                        <th className="py-2 text-right text-xs font-semibold uppercase text-slate-500">VAT Amount</th>
+                                      </tr>
+                                    </thead>
+                                    <tbody className="divide-y divide-slate-100">
+                                      {row.details.sort((a, b) => a.date.localeCompare(b.date)).map((detail) => (
+                                        <tr key={detail.id} className="text-sm">
+                                          <td className="py-2 text-slate-600">{detail.date}</td>
+                                          <td className="py-2">
+                                            <span className={`inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold ${detail.type === 'Output VAT' ? 'bg-sky-100 text-sky-700' : 'bg-emerald-100 text-emerald-700'
+                                              }`}>
+                                              {detail.type}
+                                            </span>
+                                          </td>
+                                          <td className="py-2 font-medium text-slate-800">{detail.invoiceNumber}</td>
+                                          <td className="py-2 text-slate-700">{detail.partyName}</td>
+                                          <td className="py-2 text-right text-slate-600">{toMoney(detail.totalAmount)}</td>
+                                          <td className={`py-2 text-right font-bold ${detail.type === 'Output VAT' ? 'text-sky-700' : 'text-emerald-700'}`}>
+                                            {toMoney(detail.vatAmount)}
+                                          </td>
+                                        </tr>
+                                      ))}
+                                    </tbody>
+                                  </table>
+                                )}
+                              </div>
+                            </td>
+                          </tr>
+                        )}
+                      </React.Fragment>
                     ))
                   )}
                 </tbody>

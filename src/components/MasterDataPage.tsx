@@ -1,15 +1,15 @@
-import React, { useState, useEffect, useMemo } from 'react';
-import { db, auth } from '../firebase';
-import { collection, onSnapshot, query, orderBy, addDoc, updateDoc, doc, deleteDoc } from 'firebase/firestore';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { Plus, Search, Edit2, Trash2, X, Filter, Package, Warehouse as WarehouseIcon } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { toast } from 'sonner';
-import { handleFirestoreError, OperationType } from '../lib/firestore-errors';
 import { cn } from '../lib/utils';
 import { sanitizeMoney, sanitizeQuantity } from '../lib/financialGuards';
 import AutocompleteSearch from './AutocompleteSearch';
 import { useNavigate, useOutletContext } from 'react-router-dom';
 import { removeDemoCollectionItem, saveDemoCollectionItem } from '../demo/demoDatabase';
+import { api } from '../lib/api';
+import { useSSE } from '../lib/useSSE';
+import { getToken } from '../lib/localAuth';
 
 interface MasterDataProps {
   collectionName: string;
@@ -140,52 +140,23 @@ export default function MasterDataPage({
       return;
     }
 
+    const updates = {
+      manual_manager_phone: managerFormData.phone,
+      manual_manager_email: managerFormData.email,
+      last_modified: new Date().toISOString(),
+    };
+
     try {
-      const updates: any = {
-        last_modified: new Date().toISOString()
-      };
-
-      // If it's a system manager, we might want to update the 'users' collection too, 
-      // but according to requirements "only the manager themselves" can edit.
-      // The current implementation uses 'manual_manager_email' and 'manual_manager_phone' for manual records.
-      // If it's a system manager, we update the warehouse record's view of them or the user record.
-      // Let's assume we update the warehouse's manual fields if it's not a system manager, 
-      // or we provide a way to overriding. 
-      // Actually, let's stick to the manual fields for now as they are what's displayed in getWarehouseManagerSummary.
-
-      updates.manual_manager_phone = managerFormData.phone;
-      updates.manual_manager_email = managerFormData.email;
-
       if (isDemoMode) {
-        saveDemoCollectionItem('warehouses', {
-          ...viewingItem,
-          ...updates,
-        });
+        saveDemoCollectionItem('warehouses', { ...viewingItem, ...updates });
       } else {
-        const warehouseRef = doc(db, 'warehouses', viewingItem.id);
-        await updateDoc(warehouseRef, updates);
+        await api.collection.update('warehouses', viewingItem.id, updates);
       }
-
-      // Update viewingItem locally to reflect changes immediately
-      setViewingItem({
-        ...viewingItem,
-        ...updates
-      });
-
+      setViewingItem({ ...viewingItem, ...updates });
       toast.success('Manager info updated successfully');
       setIsEditingManagerInfo(false);
-    } catch (error) {
-      console.error('Failed to update manager info:', error);
-      let message = 'Failed to update manager info';
-      try {
-        const errObj = JSON.parse((error as Error).message);
-        message = errObj.error || message;
-      } catch {
-        if (error instanceof Error && error.message) {
-          message = error.message;
-        }
-      }
-      toast.error(message);
+    } catch (error: any) {
+      toast.error(error.message || 'Failed to update manager info');
     }
   };
 
@@ -216,83 +187,42 @@ export default function MasterDataPage({
     return preferredKeys.find((key) => tableFields.some((field) => field.key === key)) || null;
   }, [tableFields]);
 
-  useEffect(() => {
+  const fetchData = useCallback(async () => {
     if (isDemoMode) {
       setData(demoDataMap[collectionName] || []);
       setLoading(false);
       return;
     }
-
-    const q = query(collection(db, collectionName), orderBy(sortField, 'asc'));
-    const unsubscribe = onSnapshot(q, (snapshot) => {
-      const items = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+    if (!getToken()) return;
+    try {
+      const items = await api.collection.getAll(collectionName);
       setData(items);
+    } catch (e: any) {
+      toast.error(`Failed to load ${collectionName}: ${e.message}`);
+    } finally {
       setLoading(false);
-    }, (error) => {
-      handleFirestoreError(error, OperationType.LIST, collectionName);
-      setLoading(false);
-    });
-    return () => unsubscribe();
-  }, [collectionName, sortField, isDemoMode, demoDataMap[collectionName]]);
+    }
+  }, [collectionName, isDemoMode]);
+
+  // SSE: re-fetch when this collection changes
+  useSSE((col) => { if (col === collectionName) fetchData(); }, !!getToken() && !isDemoMode);
+
+  useEffect(() => { fetchData(); }, [fetchData]);
 
   useEffect(() => {
-    if (isDemoMode) {
-      setRelatedProducts(ctxProducts);
-      return;
-    }
-
-    if (!shouldLoadRelatedProducts) {
-      setRelatedProducts([]);
-      return;
-    }
-
-    const unsubscribe = onSnapshot(collection(db, 'products'), (snapshot) => {
-      setRelatedProducts(snapshot.docs.map((item) => ({ id: item.id, ...item.data() })));
-    }, (error) => {
-      handleFirestoreError(error, OperationType.LIST, 'products');
-    });
-
-    return () => unsubscribe();
+    if (isDemoMode) { setRelatedProducts(ctxProducts); return; }
+    if (!shouldLoadRelatedProducts || !getToken()) { setRelatedProducts([]); return; }
+    api.collection.getAll('products').then(setRelatedProducts).catch(() => { });
   }, [shouldLoadRelatedProducts, isDemoMode, ctxProducts]);
 
   useEffect(() => {
-    if (isDemoMode) {
-      setProductLookups({
-        brands: ctxBrands,
-        categories: ctxCategories,
-        suppliers: ctxSuppliers
-      });
-      return;
-    }
-
-    if (!shouldLoadRelatedProducts) {
-      setProductLookups({ brands: [], categories: [], suppliers: [] });
-      return;
-    }
-
-    const unsubBrands = onSnapshot(collection(db, 'brands'), (snapshot) => {
-      setProductLookups((current) => ({ ...current, brands: snapshot.docs.map((item) => ({ id: item.id, ...item.data() })) }));
-    }, (error) => {
-      handleFirestoreError(error, OperationType.LIST, 'brands');
-    });
-
-    const unsubCategories = onSnapshot(collection(db, 'categories'), (snapshot) => {
-      setProductLookups((current) => ({ ...current, categories: snapshot.docs.map((item) => ({ id: item.id, ...item.data() })) }));
-    }, (error) => {
-      handleFirestoreError(error, OperationType.LIST, 'categories');
-    });
-
-    const unsubSuppliers = onSnapshot(collection(db, 'suppliers'), (snapshot) => {
-      setProductLookups((current) => ({ ...current, suppliers: snapshot.docs.map((item) => ({ id: item.id, ...item.data() })) }));
-    }, (error) => {
-      handleFirestoreError(error, OperationType.LIST, 'suppliers');
-    });
-
-    return () => {
-      unsubBrands();
-      unsubCategories();
-      unsubSuppliers();
-    };
+    if (isDemoMode) { setProductLookups({ brands: ctxBrands, categories: ctxCategories, suppliers: ctxSuppliers }); return; }
+    if (!shouldLoadRelatedProducts || !getToken()) { setProductLookups({ brands: [], categories: [], suppliers: [] }); return; }
+    Promise.all([
+      api.collection.getAll('brands'),
+      api.collection.getAll('categories'),
+      api.collection.getAll('suppliers'),
+    ]).then(([b, c, s]) => setProductLookups({ brands: b, categories: c, suppliers: s })).catch(() => { });
   }, [shouldLoadRelatedProducts, isDemoMode, ctxBrands, ctxCategories, ctxSuppliers]);
 
   const getSelectLabel = (field: MasterDataProps['fields'][number], value: string) => {
@@ -491,7 +421,7 @@ export default function MasterDataPage({
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!isDemoMode && !auth.currentUser) {
+    if (!isDemoMode && !getToken()) {
       toast.error('You must be signed in to perform this action');
       return;
     }
@@ -525,31 +455,17 @@ export default function MasterDataPage({
       if (isDemoMode) {
         const payload = editingId
           ? { ...basePayload, id: editingId }
-          : {
-              ...basePayload,
-              ...(hideStatus ? {} : { status: formData.status || 'active' }),
-              created_at: new Date().toISOString(),
-            };
-
+          : { ...basePayload, ...(hideStatus ? {} : { status: 'active' }), created_at: new Date().toISOString() };
         saveDemoCollectionItem(collectionName as any, payload);
         toast.success(`${title} ${editingId ? 'updated' : 'created'} successfully`);
       } else if (editingId) {
-        try {
-          await updateDoc(doc(db, collectionName, editingId), basePayload);
-        } catch (error) {
-          handleFirestoreError(error, OperationType.UPDATE, `${collectionName}/${editingId}`);
-        }
+        await api.collection.update(collectionName, editingId, basePayload);
         toast.success(`${title} updated successfully`);
       } else {
-        try {
-          await addDoc(collection(db, collectionName), {
-            ...basePayload,
-            ...(hideStatus ? {} : { status: formData.status || 'active' }),
-            created_at: new Date().toISOString(),
-          });
-        } catch (error) {
-          handleFirestoreError(error, OperationType.CREATE, collectionName);
-        }
+        await api.collection.create(collectionName, {
+          ...basePayload,
+          ...(hideStatus ? {} : { status: 'active' }),
+        });
         toast.success(`${title} created successfully`);
       }
       setIsModalOpen(false);
@@ -574,24 +490,17 @@ export default function MasterDataPage({
         removeDemoCollectionItem(collectionName as any, id);
       } else {
         const currentItem = data.find((item) => item.id === id);
-        if (currentItem) {
-          saveDemoCollectionItem(collectionName as any, { ...currentItem, status: 'inactive' });
-        }
+        if (currentItem) saveDemoCollectionItem(collectionName as any, { ...currentItem, status: 'inactive' });
       }
       toast.success(`${title} ${hardDelete ? 'deleted' : 'deactivated'}`);
       return;
     }
     try {
-      if (hardDelete) {
-        await deleteDoc(doc(db, collectionName, id));
-        toast.success(`${title} deleted`);
-        return;
-      }
-
-      await updateDoc(doc(db, collectionName, id), { status: 'inactive' });
-      toast.success(`${title} deactivated`);
-    } catch (error) {
-      handleFirestoreError(error, hardDelete ? OperationType.DELETE : OperationType.UPDATE, `${collectionName}/${id}`);
+      await api.collection.remove(collectionName, id);
+      toast.success(`${title} ${hardDelete ? 'deleted' : 'deactivated'}`);
+      fetchData();
+    } catch (error: any) {
+      toast.error(error.message || 'Operation failed');
     }
   };
   const filteredData = data.filter(item => {
@@ -1058,11 +967,10 @@ export default function MasterDataPage({
                                   </td>
                                   <td className="px-4 py-3 text-gray-600">{invoice.warehouseName || 'N/A'}</td>
                                   <td className="px-4 py-3">
-                                    <span className={`inline-flex rounded-full px-2.5 py-1 text-xs font-bold ${
-                                      invoice.transferTypeLabel === 'sell'
+                                    <span className={`inline-flex rounded-full px-2.5 py-1 text-xs font-bold ${invoice.transferTypeLabel === 'sell'
                                         ? 'bg-indigo-50 text-indigo-700'
                                         : 'bg-emerald-50 text-emerald-700'
-                                    }`}>
+                                      }`}>
                                       {invoice.transferTypeLabel}
                                     </span>
                                   </td>

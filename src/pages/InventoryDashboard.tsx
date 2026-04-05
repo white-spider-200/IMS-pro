@@ -1,6 +1,4 @@
 import React, { useState, useEffect } from 'react';
-import { db } from '../firebase';
-import { collection, onSnapshot, query, orderBy, getDocs, doc, updateDoc } from 'firebase/firestore';
 import { Boxes, Plus, ArrowRightLeft, Search, Filter, Warehouse as WarehouseIcon, Package, AlertTriangle, History as HistoryIcon, List, X, Users, Info, DollarSign, Ban } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { toast } from 'sonner';
@@ -59,8 +57,7 @@ export default function InventoryDashboard() {
           ...updates,
         });
       } else {
-        const warehouseRef = doc(db, 'warehouses', selectedWarehouse.id);
-        await updateDoc(warehouseRef, updates);
+        await (await import('../lib/api')).api.collection.update('warehouses', selectedWarehouse.id, updates);
       }
 
       setSelectedWarehouse({
@@ -237,42 +234,7 @@ export default function InventoryDashboard() {
     }
   };
 
-  useEffect(() => {
-    if (isDemoMode || isSyncPaused) return;
 
-    const handleError = (error: any) => {
-      console.error('Firestore snapshot error:', error);
-      toast.error('Failed to sync inventory data');
-      setLoading(false);
-    };
-
-    const unsubBalances = onSnapshot(collection(db, 'inventory_balances'), (s) => {
-      setBalances(s.docs.map(d => ({ id: d.id, ...d.data() })));
-      setLoading(false);
-    }, handleError);
-
-    const unsubVariants = onSnapshot(collection(db, 'product_variants'), (s) => setVariants(s.docs.map(d => ({ id: d.id, ...d.data() }))), handleError);
-    const unsubProducts = onSnapshot(collection(db, 'products'), (s) => setProducts(s.docs.map(d => ({ id: d.id, ...d.data() }))), handleError);
-    const unsubWarehouses = onSnapshot(collection(db, 'warehouses'), (s) => {
-      const wData = s.docs.map(d => ({ id: d.id, ...d.data() }));
-      setWarehouses(wData);
-      setSelectedWarehouseId(current => (wData.length > 0 && !current) ? wData[0].id : current);
-    }, handleError);
-    const unsubMovements = onSnapshot(collection(db, 'stock_movements'), (s) => setMovements(s.docs.map(d => ({ id: d.id, ...d.data() }))), handleError);
-    const unsubInvoices = onSnapshot(collection(db, 'revenue_invoices'), (s) => setRevenueInvoices(s.docs.map(d => ({ id: d.id, ...d.data() }))), handleError);
-    const unsubReturnInvoices = onSnapshot(collection(db, 'return_invoices'), (s) => setReturnInvoices(s.docs.map(d => ({ id: d.id, ...d.data() }))), handleError);
-    const unsubBrands = onSnapshot(collection(db, 'brands'), (s) => setBrands(s.docs.map(d => ({ id: d.id, ...d.data() }))), handleError);
-    const unsubCategories = onSnapshot(collection(db, 'categories'), (s) => setCategories(s.docs.map(d => ({ id: d.id, ...d.data() }))), handleError);
-    const unsubSuppliers = onSnapshot(collection(db, 'suppliers'), (s) => setSuppliers(s.docs.map(d => ({ id: d.id, ...d.data() }))), handleError);
-    const unsubUsers = onSnapshot(collection(db, 'users'), (s) => setUsers(s.docs.map(d => ({ id: d.id, ...d.data() }))), handleError);
-    const unsubClients = onSnapshot(collection(db, 'clients'), (s) => setClients(s.docs.map(d => ({ id: d.id, ...d.data() }))), handleError);
-    const unsubTransferInvoices = onSnapshot(collection(db, 'transfer_invoices'), (s) => setTransferInvoices(s.docs.map(d => ({ id: d.id, ...d.data() }))), handleError);
-
-    return () => {
-      unsubBalances(); unsubVariants(); unsubProducts(); unsubWarehouses(); unsubMovements(); unsubInvoices();
-      unsubBrands(); unsubCategories(); unsubSuppliers(); unsubClients(); unsubUsers(); unsubTransferInvoices(); unsubReturnInvoices();
-    };
-  }, [isDemoMode, isSyncPaused]);
 
   const handleReceive = async (e: React.FormEvent) => {
     e.preventDefault();

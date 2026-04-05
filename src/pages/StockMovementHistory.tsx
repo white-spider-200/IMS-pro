@@ -1,6 +1,4 @@
 import { useState, useEffect } from 'react';
-import { db } from '../firebase';
-import { collection, onSnapshot, query, orderBy, limit } from 'firebase/firestore';
 import { History as HistoryIcon, ArrowUpRight, ArrowDownLeft, ArrowRightLeft, AlertCircle, Package, X, Warehouse as WarehouseIcon, Info, Users, ChevronLeft, ChevronRight } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { cn } from '../lib/utils';
@@ -42,58 +40,14 @@ export default function StockMovementHistory() {
   } = outletContext;
 
   useEffect(() => {
-    if (isDemoMode) {
-      setMovements(ctxMovements);
-      setVariants(ctxVariants);
-      setProducts(ctxProducts);
-      setWarehouses(ctxWarehouses);
-      setSuppliers(ctxSuppliers);
-      setBalances(ctxBalances);
-      setLoading(false);
-      return;
-    }
-
-    const handleError = (error: any) => {
-      console.error('Firestore snapshot error:', error);
-      toast.error('Failed to sync movement history');
-      setLoading(false);
-    };
-
-    const q = query(collection(db, 'stock_movements'), orderBy('timestamp', 'desc'), limit(100));
-    const unsubMovements = onSnapshot(q, (s) => {
-      setMovements(s.docs.map(d => ({ id: d.id, ...d.data() })));
-      setLoading(false);
-    }, handleError);
-
-    const unsubVariants = onSnapshot(collection(db, 'product_variants'), (s) => {
-      setVariants(s.docs.map(d => ({ id: d.id, ...d.data() })));
-    }, handleError);
-
-    const unsubProducts = onSnapshot(collection(db, 'products'), (s) => {
-      setProducts(s.docs.map(d => ({ id: d.id, ...d.data() })));
-    }, handleError);
-
-    const unsubWarehouses = onSnapshot(collection(db, 'warehouses'), (s) => {
-      setWarehouses(s.docs.map(d => ({ id: d.id, ...d.data() })));
-    }, handleError);
-
-    const unsubSuppliers = onSnapshot(collection(db, 'suppliers'), (s) => {
-      setSuppliers(s.docs.map(d => ({ id: d.id, ...d.data() })));
-    }, handleError);
-
-    const unsubBalances = onSnapshot(collection(db, 'inventory_balances'), (s) => {
-      setBalances(s.docs.map(d => ({ id: d.id, ...d.data() })));
-    }, handleError);
-
-    return () => {
-      unsubMovements();
-      unsubVariants();
-      unsubProducts();
-      unsubWarehouses();
-      unsubSuppliers();
-      unsubBalances();
-    };
-  }, [isDemoMode, ctxMovements, ctxVariants, ctxProducts, ctxWarehouses, ctxSuppliers, ctxBalances]);
+    setMovements(ctxMovements);
+    setVariants(ctxVariants);
+    setProducts(ctxProducts);
+    setWarehouses(ctxWarehouses);
+    setSuppliers(ctxSuppliers);
+    setBalances(ctxBalances);
+    setLoading(false);
+  }, [ctxMovements, ctxVariants, ctxProducts, ctxWarehouses, ctxSuppliers, ctxBalances]);
 
   const getVariantName = (id: string) => {
     const v = variants.find(v => v.id === id);

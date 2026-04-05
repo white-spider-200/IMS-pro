@@ -69,6 +69,8 @@ export default function BuyPage() {
   const [selectedWarehouseId, setSelectedWarehouseId] = useState('');
   const [quantity, setQuantity] = useState('');
   const [unitCost, setUnitCost] = useState('');
+  const [vatSelection, setVatSelection] = useState('0');
+  const [customVat, setCustomVat] = useState('');
   const [notes, setNotes] = useState('');
   const [recordPaymentNow, setRecordPaymentNow] = useState(false);
   const [paymentAmount, setPaymentAmount] = useState('');
@@ -90,8 +92,19 @@ export default function BuyPage() {
   const numericQuantity = Number(quantity);
   const numericUnitCost = Number(unitCost || 0);
   const numericPaymentAmount = Number(paymentAmount || 0);
+
+  const effectiveVatRate = useMemo(() => {
+    if (vatSelection === 'other') {
+      const parsed = Number(customVat);
+      return Number.isFinite(parsed) && parsed >= 0 ? parsed : null;
+    }
+    const parsed = Number(vatSelection);
+    return Number.isFinite(parsed) && parsed >= 0 ? parsed : null;
+  }, [customVat, vatSelection]);
+
   const subtotal = Number.isFinite(numericQuantity) && Number.isFinite(numericUnitCost) ? numericQuantity * numericUnitCost : 0;
-  const totalCost = subtotal;
+  const vatAmount = subtotal * ((effectiveVatRate || 0) / 100);
+  const totalCost = subtotal + vatAmount;
 
   const handleProductChange = (productId: string) => {
     setSelectedProductId(productId);
@@ -135,6 +148,8 @@ export default function BuyPage() {
     setSelectedWarehouseId('');
     setQuantity('');
     setUnitCost('');
+    setVatSelection('0');
+    setCustomVat('');
     setNotes('');
     setRecordPaymentNow(false);
     setPaymentAmount('');
@@ -159,6 +174,7 @@ export default function BuyPage() {
           selectedClient.id, selectedClient.name, numericUnitCost,
           {
             notes: notes || `Purchased stock from ${selectedClient.name}`,
+            vatRate: effectiveVatRate || 0,
             paymentAmount: recordPaymentNow ? numericPaymentAmount : 0,
             paymentNotes,
             transactionTime,
@@ -171,6 +187,7 @@ export default function BuyPage() {
           clientId: selectedClient.id, clientName: selectedClient.name,
           warehouseId: selectedWarehouse.id, quantity: numericQuantity,
           unitCost: numericUnitCost,
+          vatRate: effectiveVatRate || 0,
           paymentAmount: recordPaymentNow ? numericPaymentAmount : 0,
           paymentNotes,
           notes: notes || `Purchased stock from ${selectedClient.name}`,
@@ -314,6 +331,34 @@ export default function BuyPage() {
                     className={inputCls(hasAttemptedSubmit && !!fieldErrors.unitCost)}
                     placeholder="0.00"
                   />
+                </FieldGroup>
+              </div>
+
+              <div className="grid gap-4 sm:grid-cols-2">
+                <FieldGroup label="VAT Rate" icon={DollarSign}>
+                  <div className="flex flex-col gap-2">
+                    <select
+                      value={vatSelection}
+                      onChange={(e) => setVatSelection(e.target.value)}
+                      className={inputCls()}
+                    >
+                      <option value="0">0% (Exempt)</option>
+                      <option value="5">5% (Reduced)</option>
+                      <option value="20">20% (Standard)</option>
+                      <option value="other">Custom...</option>
+                    </select>
+                    {vatSelection === 'other' && (
+                      <input
+                        type="number"
+                        min="0"
+                        step="0.1"
+                        value={customVat}
+                        onChange={(e) => setCustomVat(e.target.value)}
+                        placeholder="VAT %"
+                        className={inputCls()}
+                      />
+                    )}
+                  </div>
                 </FieldGroup>
               </div>
             </div>
@@ -493,6 +538,7 @@ export default function BuyPage() {
                 <SummaryRow label="Quantity" value={numericQuantity > 0 ? String(numericQuantity) : '0'} />
                 <SummaryRow label="Unit price" value={`$${numericUnitCost.toFixed(2)}`} />
                 <SummaryRow label="Subtotal" value={`$${subtotal.toFixed(2)}`} />
+                <SummaryRow label={`VAT (${effectiveVatRate || 0}%)`} value={`$${vatAmount.toFixed(2)}`} />
                 <SummaryRow label="Down payment" value={recordPaymentNow ? `$${numericPaymentAmount.toFixed(2)}` : '$0.00'} />
                 <SummaryRow label="Total Cost" value={`$${totalCost.toFixed(2)}`} highlight />
               </div>

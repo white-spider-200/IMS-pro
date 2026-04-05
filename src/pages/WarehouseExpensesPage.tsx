@@ -1,10 +1,9 @@
 import React, { useMemo, useState } from 'react';
 import { useOutletContext } from 'react-router-dom';
-import { addDoc, collection, deleteDoc, doc, updateDoc } from 'firebase/firestore';
 import { Building2, CalendarDays, CheckCircle2, Coins, Repeat, ReceiptText, Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
-import { db } from '../firebase';
 import { removeDemoCollectionItem, saveDemoCollectionItem } from '../demo/demoDatabase';
+import { api } from '../lib/api';
 
 type WarehouseExpensesPageContext = {
   isDemoMode?: boolean;
@@ -152,7 +151,7 @@ export default function WarehouseExpensesPage() {
       if (isDemoMode) {
         saveDemoCollectionItem('warehouse_expenses', payload);
       } else {
-        await addDoc(collection(db, 'warehouse_expenses'), payload);
+        await api.collection.create('warehouse_expenses', payload);
       }
       toast.success('Expense saved.');
       setFormData({
@@ -184,7 +183,7 @@ export default function WarehouseExpensesPage() {
       if (isDemoMode) {
         removeDemoCollectionItem('warehouse_expenses', expense.id);
       } else {
-        await deleteDoc(doc(db, 'warehouse_expenses', expense.id));
+        await api.collection.remove('warehouse_expenses', expense.id);
       }
       toast.success('Expense deleted.');
     } catch (error: any) {
@@ -212,7 +211,7 @@ export default function WarehouseExpensesPage() {
       if (isDemoMode) {
         saveDemoCollectionItem('warehouse_expenses', updates);
       } else {
-        await updateDoc(doc(db, 'warehouse_expenses', expense.id), {
+        await api.collection.update('warehouse_expenses', expense.id, {
           status: 'paid',
           payment_date: paymentDate.trim(),
           payment_method: paymentMethod.trim(),

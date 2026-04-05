@@ -1,6 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { db } from '../firebase';
-import { collection, onSnapshot, query, where, orderBy, limit, Timestamp } from 'firebase/firestore';
+import { useOutletContext } from 'react-router-dom';
 import {
   BarChart3,
   Warehouse as WarehouseIcon,
@@ -63,49 +62,7 @@ export default function ManagerDashboard() {
     }
   };
 
-  useEffect(() => {
-    setLoading(true);
-    const handleError = (err: any) => {
-      console.error(err);
-      toast.error('Failed to sync manager data');
-    };
 
-    const unsubWarehouses = onSnapshot(collection(db, 'warehouses'), (s) => {
-      setWarehouses(s.docs.map(d => ({ id: d.id, ...d.data() } as Warehouse)));
-    }, handleError);
-
-    const unsubVariants = onSnapshot(collection(db, 'product_variants'), (s) => {
-      setVariants(s.docs.map(d => ({ id: d.id, ...d.data() } as ProductVariant)));
-    }, handleError);
-
-    const unsubBalances = onSnapshot(collection(db, 'inventory_balances'), (s) => {
-      setBalances(s.docs.map(d => ({ id: d.id, ...d.data() } as InventoryBalance)));
-    }, handleError);
-
-    const unsubReservations = onSnapshot(collection(db, 'reservations'), (s) => {
-      setReservations(s.docs.map(d => ({ id: d.id, ...d.data() } as Reservation)));
-    }, handleError);
-
-    const thirtyDaysAgo = new Date();
-    thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
-    const unsubMovements = onSnapshot(query(collection(db, 'stock_movements'), where('timestamp', '>=', thirtyDaysAgo.toISOString())), (s) => {
-      setMovements(s.docs.map(d => ({ id: d.id, ...d.data() } as StockMovement)));
-      setLoading(false);
-    }, handleError);
-
-    const unsubUsers = onSnapshot(collection(db, 'users'), (s) => {
-      setUsers(s.docs.map(d => ({ id: d.id, ...d.data() } as User)));
-    }, handleError);
-
-    return () => {
-      unsubWarehouses();
-      unsubVariants();
-      unsubBalances();
-      unsubReservations();
-      unsubMovements();
-      unsubUsers();
-    };
-  }, []);
 
   // 1. Warehouse Health Summary
   const warehouseStats = useMemo(() => {

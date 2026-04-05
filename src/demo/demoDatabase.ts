@@ -308,7 +308,7 @@ export function clearDemoDatabase() {
 }
 
 export function subscribeDemoDatabase(onChange: () => void) {
-  if (typeof window === 'undefined') return () => {};
+  if (typeof window === 'undefined') return () => { };
 
   const handleStorage = (event: StorageEvent) => {
     if (event.key === STORAGE_KEY) {
@@ -331,9 +331,9 @@ export function saveDemoCollectionItem(collectionName: keyof DemoDatabase, item:
   const record = item.id
     ? item
     : {
-        ...item,
-        id: `${collectionName}-${crypto.randomUUID()}`,
-      };
+      ...item,
+      id: `${collectionName}-${crypto.randomUUID()}`,
+    };
   const nextCollection = record.id
     ? collection.some((entry: any) => entry.id === record.id)
       ? collection.map((entry: any) => (entry.id === record.id ? record : entry))
@@ -409,6 +409,7 @@ export function buyFromCustomerDemoStock(
     deliveryStatus?: string;
     deliveryAddress?: string;
     deliveryFee?: number;
+    vatRate?: number;
     paymentAmount?: number;
     paymentNotes?: string;
     notes?: string;
@@ -431,8 +432,10 @@ export function buyFromCustomerDemoStock(
 
   const timestamp = options.transactionTime || new Date().toISOString();
   const subtotal = quantity * Number(unitCost || 0);
+  const vatRate = Number(options.vatRate || 0);
+  const vatAmount = subtotal * (vatRate / 100);
   const deliveryFee = Number(options.deliveryFee || 0);
-  const totalCost = subtotal + deliveryFee;
+  const totalCost = subtotal + vatAmount + deliveryFee;
   const paymentAmount = Number(options.paymentAmount || 0);
   assertDemoTransactionValue(paymentAmount, 'Payment amount');
   if (paymentAmount > totalCost) {
@@ -480,9 +483,9 @@ export function buyFromCustomerDemoStock(
     warehouse_allocations: [],
     receiving_warehouse_id: warehouseId,
     unit_cost: Number(unitCost || 0),
-    vat_rate: 0,
+    vat_rate: vatRate,
     subtotal,
-    vat_amount: 0,
+    vat_amount: vatAmount,
     delivery_fee: deliveryFee,
     delivery_status: options.deliveryStatus || 'pending',
     delivery_address: options.deliveryAddress || '',
@@ -522,8 +525,8 @@ export function buyFromCustomerDemoStock(
     product_variant_id: variantId,
     quantity,
     subtotal,
-    vat_rate: 0,
-    vat_amount: 0,
+    vat_rate: vatRate,
+    vat_amount: vatAmount,
     total_amount: totalCost,
     status: 'completed',
     movement_id: movementId,

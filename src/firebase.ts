@@ -1,8 +1,5 @@
-import { initializeApp } from 'firebase/app';
-import { getAuth } from 'firebase/auth';
-import { getFirestore } from 'firebase/firestore';
-import firebaseConfig from '../firebase-applet-config.json';
+// Firebase has been removed. This file is kept as a stub to avoid broken imports.
+// All data operations now use the local REST API via src/lib/api.ts
 
-const app = initializeApp(firebaseConfig);
-export const db = getFirestore(app, firebaseConfig.firestoreDatabaseId);
-export const auth = getAuth(app);
+export const db = null;
+export const auth = null;

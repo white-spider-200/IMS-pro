@@ -22,8 +22,13 @@ export function sanitizeQuantity(value: unknown) {
 export function hasValidInvoiceTotals(invoice: any) {
   if (!invoice) return false;
 
-  const quantity = Array.isArray(invoice.items)
-    ? invoice.items.reduce((sum: number, item: any) => sum + toFiniteNumber(item?.quantity), 0)
+  let parsedItems = invoice.items;
+  if (typeof parsedItems === 'string') {
+    try { parsedItems = JSON.parse(parsedItems); } catch { parsedItems = []; }
+  }
+
+  const quantity = Array.isArray(parsedItems)
+    ? parsedItems.reduce((sum: number, item: any) => sum + toFiniteNumber(item?.quantity), 0)
     : toFiniteNumber(invoice.quantity_purchased ?? invoice.requested_quantity ?? invoice.quantity);
 
   const total = invoice.total_amount ?? invoice.total_cost ?? invoice.subtotal ?? 0;
@@ -39,11 +44,16 @@ export function hasValidInvoiceTotals(invoice: any) {
 export function hasValidTransferTotals(transfer: any, linkedInvoice?: any) {
   if (!transfer && !linkedInvoice) return false;
 
+  let parsedLinkedItems = linkedInvoice?.items;
+  if (typeof parsedLinkedItems === 'string') {
+    try { parsedLinkedItems = JSON.parse(parsedLinkedItems); } catch { parsedLinkedItems = []; }
+  }
+
   const quantity = transfer?.quantity
     ?? linkedInvoice?.quantity_purchased
     ?? linkedInvoice?.requested_quantity
-    ?? (Array.isArray(linkedInvoice?.items)
-      ? linkedInvoice.items.reduce((sum: number, item: any) => sum + toFiniteNumber(item?.quantity), 0)
+    ?? (Array.isArray(parsedLinkedItems)
+      ? parsedLinkedItems.reduce((sum: number, item: any) => sum + toFiniteNumber(item?.quantity), 0)
       : 0);
   const total = transfer?.total_amount ?? linkedInvoice?.total_amount ?? linkedInvoice?.total_cost ?? 0;
 

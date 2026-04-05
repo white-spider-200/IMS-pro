@@ -30,11 +30,22 @@ export type CashFlowRow = {
   amount: number;
 };
 
+export type TaxDetail = {
+  id: string;
+  date: string;
+  invoiceNumber: string;
+  partyName: string;
+  type: 'Output VAT' | 'Input VAT';
+  vatAmount: number;
+  totalAmount: number;
+};
+
 export type TaxRow = {
   month: string;
   outputVat: number;
   inputVat: number;
   netVat: number;
+  details: TaxDetail[];
 };
 
 function parseDate(value: any) {
@@ -312,21 +323,45 @@ export function summarizeCashFlow(cashFlowRows: CashFlowRow[]) {
   };
 }
 
-export function buildTaxRows(salesInvoices: any[], payableInvoices: any[], filters: AccountingFilters) {
+export function buildTaxRows(salesInvoices: any[], payableInvoices: any[], filters: AccountingFilters): TaxRow[] {
   const searchLower = String(filters.searchTerm || '').trim().toLowerCase();
-  const monthMap = new Map<string, { month: string; outputVat: number; inputVat: number }>();
+  const monthMap = new Map<string, TaxRow>();
 
   salesInvoices.forEach((invoice) => {
     const month = getMonthKey(invoice.created_at) || 'Unknown';
-    const current = monthMap.get(month) || { month, outputVat: 0, inputVat: 0 };
-    current.outputVat += sanitizeMoney(invoice.vat_amount);
+    const current = monthMap.get(month) || { month, outputVat: 0, inputVat: 0, netVat: 0, details: [] };
+    const vat = sanitizeMoney(invoice.vat_amount);
+    current.outputVat += vat;
+    if (vat > 0) {
+      current.details.push({
+        id: invoice.id,
+        date: formatDateLabel(invoice.created_at),
+        invoiceNumber: invoice.invoice_number || 'N/A',
+        partyName: invoice.customer_name || 'N/A',
+        type: 'Output VAT',
+        vatAmount: vat,
+        totalAmount: sanitizeMoney(invoice.total_amount),
+      });
+    }
     monthMap.set(month, current);
   });
 
   payableInvoices.forEach((invoice) => {
     const month = getMonthKey(invoice.created_at) || 'Unknown';
-    const current = monthMap.get(month) || { month, outputVat: 0, inputVat: 0 };
-    current.inputVat += sanitizeMoney(invoice.vat_amount);
+    const current = monthMap.get(month) || { month, outputVat: 0, inputVat: 0, netVat: 0, details: [] };
+    const vat = sanitizeMoney(invoice.vat_amount);
+    current.inputVat += vat;
+    if (vat > 0) {
+      current.details.push({
+        id: invoice.id,
+        date: formatDateLabel(invoice.created_at),
+        invoiceNumber: invoice.invoice_number || 'N/A',
+        partyName: invoice.supplier_name || invoice.supplier || invoice.client_name || invoice.customer_name || 'N/A',
+        type: 'Input VAT',
+        vatAmount: vat,
+        totalAmount: sanitizeMoney(invoice.total_amount || invoice.total_cost || 0),
+      });
+    }
     monthMap.set(month, current);
   });
 

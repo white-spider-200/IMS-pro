@@ -1,6 +1,4 @@
 import React, { useState, useEffect } from 'react';
-import { db } from '../firebase';
-import { collection, onSnapshot, query, where, orderBy, limit, addDoc, Timestamp } from 'firebase/firestore';
 import {
   ShoppingCart,
   Truck,
@@ -57,52 +55,7 @@ export default function ProcurementDashboard() {
     }
   };
 
-  useEffect(() => {
-    setLoading(true);
-    const handleError = (err: any) => {
-      console.error(err);
-      toast.error('Failed to sync procurement data');
-    };
-
-    const unsubVariants = onSnapshot(collection(db, 'product_variants'), (s) => {
-      setVariants(s.docs.map(d => ({ id: d.id, ...d.data() } as ProductVariant)));
-    }, handleError);
-
-    const unsubProducts = onSnapshot(collection(db, 'products'), (s) => {
-      setProducts(s.docs.map(d => ({ id: d.id, ...d.data() } as Product)));
-    }, handleError);
-
-    const unsubSuppliers = onSnapshot(collection(db, 'suppliers'), (s) => {
-      setSuppliers(s.docs.map(d => ({ id: d.id, ...d.data() } as Supplier)));
-    }, handleError);
-
-    const unsubWarehouses = onSnapshot(collection(db, 'warehouses'), (s) => {
-      setWarehouses(s.docs.map(d => ({ id: d.id, ...d.data() } as Warehouse)));
-    }, handleError);
-
-    const unsubBalances = onSnapshot(collection(db, 'inventory_balances'), (s) => {
-      setBalances(s.docs.map(d => ({ id: d.id, ...d.data() } as InventoryBalance)));
-    }, handleError);
-
-    const unsubPOs = onSnapshot(query(collection(db, 'purchase_orders'), orderBy('created_at', 'desc')), (s) => {
-      setPurchaseOrders(s.docs.map(d => ({ id: d.id, ...d.data() } as PurchaseOrder)));
-    }, handleError);
-
-    const unsubBackorders = onSnapshot(query(collection(db, 'backorders'), where('status', '==', 'pending')), (s) => {
-      setBackorders(s.docs.map(d => ({ id: d.id, ...d.data() } as Backorder)));
-      setLoading(false);
-    }, handleError);
-
-    return () => {
-      unsubVariants();
-      unsubProducts();
-      unsubSuppliers();
-      unsubWarehouses();
-      unsubBalances();
-      unsubPOs();
-      unsubBackorders();
-    };
-  }, []);
+  // Data provided via outlet context
 
   const getIncomingQty = (variantId: string) => {
     return purchaseOrders
@@ -159,7 +112,7 @@ export default function ProcurementDashboard() {
         expected_delivery_date: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
         created_at: new Date().toISOString()
       };
-      await addDoc(collection(db, 'purchase_orders'), po);
+      await (await import('../lib/api')).api.collection.create('purchase_orders', po);
       toast.success(`Draft PO created for ${rec.variant.variant_code}`);
     } catch (error) {
       console.error(error);

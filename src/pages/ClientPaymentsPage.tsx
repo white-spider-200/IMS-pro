@@ -1,10 +1,9 @@
 import React, { useMemo, useState } from 'react';
 import { ArrowLeft, DollarSign, FileSpreadsheet, FileText, Printer, Receipt, Wallet } from 'lucide-react';
-import { collection, doc, runTransaction } from 'firebase/firestore';
 import { useNavigate, useOutletContext, useParams } from 'react-router-dom';
 import { toast } from 'sonner';
-import { db } from '../firebase';
 import { addDemoClientPayment } from '../demo/demoDatabase';
+import { api } from '../lib/api';
 import {
   calculateClientFinancials,
   getClientPayments,
@@ -264,81 +263,51 @@ export default function ClientPaymentsPage() {
           createdAt,
         });
       } else {
-        const paymentRef = doc(collection(db, 'client_payments'));
-        const invoiceRef = doc(db, scope === 'sale' ? 'revenue_invoices' : 'purchase_invoices', row.id);
-        const clientRef = doc(db, 'clients', client.id);
         const nextPaidAmount = row.paidAmount + amount;
         const nextStatus = nextPaidAmount >= row.totalAmount ? 'paid' : 'partial';
 
+        // 1. Create the payment record
+        await api.collection.create('client_payments', payment);
+
+        // 2. Update invoice status
+        if (scope === 'sale') {
+          await api.collection.update('revenue_invoices', row.id, {
+            status: nextStatus,
+            paid_amount: nextPaidAmount,
+            paid_at: nextStatus === 'paid' ? createdAt : null,
+          });
+        } else {
+          await api.collection.update('purchase_invoices', row.id, {
+            payment_status: nextStatus,
+            paid_amount: nextPaidAmount,
+            paid_at: nextStatus === 'paid' ? createdAt : null,
+          });
+        }
+
+        // 3. Update client financials
         const nextRevenueInvoices =
           scope === 'sale'
             ? revenueInvoices.map((invoice) =>
-                invoice.id === row.id
-                  ? {
-                      ...invoice,
-                      status: nextStatus,
-                      paid_amount: nextPaidAmount,
-                      paid_at: nextStatus === 'paid' ? createdAt : null,
-                    }
-                  : invoice
-              )
+              invoice.id === row.id
+                ? { ...invoice, status: nextStatus, paid_amount: nextPaidAmount }
+                : invoice
+            )
             : revenueInvoices;
-
         const nextPurchaseInvoices =
           scope === 'purchase'
             ? purchaseInvoices.map((invoice) =>
-                invoice.id === row.id
-                  ? {
-                      ...invoice,
-                      payment_status: nextStatus,
-                      paid_amount: nextPaidAmount,
-                      paid_at: nextStatus === 'paid' ? createdAt : null,
-                    }
-                  : invoice
-              )
+              invoice.id === row.id
+                ? { ...invoice, payment_status: nextStatus, paid_amount: nextPaidAmount }
+                : invoice
+            )
             : purchaseInvoices;
-
         const updatedFinancials = calculateClientFinancials(
           client,
           nextRevenueInvoices,
           nextPurchaseInvoices,
-          [...clientPayments, { id: paymentRef.id, ...payment }]
+          [...clientPayments, payment]
         );
-
-        await runTransaction(db, async (transaction) => {
-          transaction.set(paymentRef, payment);
-
-          if (scope === 'sale') {
-            transaction.set(
-              invoiceRef,
-              {
-                status: nextStatus,
-                paid_amount: nextPaidAmount,
-                paid_at: nextStatus === 'paid' ? createdAt : null,
-              },
-              { merge: true }
-            );
-          } else {
-            transaction.set(
-              invoiceRef,
-              {
-                payment_status: nextStatus,
-                paid_amount: nextPaidAmount,
-                paid_at: nextStatus === 'paid' ? createdAt : null,
-              },
-              { merge: true }
-            );
-          }
-
-          transaction.set(
-            clientRef,
-            {
-              ...updatedFinancials,
-              last_modified: createdAt,
-            },
-            { merge: true }
-          );
-        });
+        await api.collection.update('clients', client.id, { ...updatedFinancials, last_modified: createdAt });
       }
 
       toast.success(scope === 'sale' ? 'Customer payment saved.' : 'Outgoing payment saved.');
