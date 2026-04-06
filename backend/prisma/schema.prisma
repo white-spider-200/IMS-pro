@@ -1,0 +1,337 @@
+generator client {
+  provider = "prisma-client-js"
+  engineType = "binary"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model brands {
+  id                String  @id
+  name              String
+  country_of_origin String?
+  logo_url          String?
+  status            String? @default("active")
+  created_at        String
+}
+
+model categories {
+  id                 String  @id
+  name               String
+  category_code      String? @unique
+  description        String?
+  parent_category_id String?
+  created_at         String
+}
+
+model client_payments {
+  id             String  @id
+  client_id      String?
+  client_name    String?
+  direction      String
+  scope          String?
+  invoice_id     String?
+  invoice_number String?
+  receipt_number String?
+  amount         Float?  @default(0) @db.Real
+  notes          String?
+  warehouse_id   String?
+  created_at     String
+}
+
+model clients {
+  id             String  @id
+  client_code    String? @unique
+  name           String
+  email          String?
+  phone          String?
+  location       String?
+  balance_due    Float?  @default(0) @db.Real
+  paid_amount    Float?  @default(0) @db.Real
+  credit_balance Float?  @default(0) @db.Real
+  total_billed   Float?  @default(0) @db.Real
+  pending_amount Float?  @default(0) @db.Real
+  balance        Float?  @default(0) @db.Real
+  status         String? @default("active")
+  created_at     String
+  last_modified  String?
+}
+
+model inventory_balances {
+  id                 String @id
+  variant_id         String
+  warehouse_id       String
+  available_quantity Float  @default(0) @db.Real
+  reserved_quantity  Float  @default(0) @db.Real
+  blocked_quantity   Float  @default(0) @db.Real
+  version            Int    @default(0)
+  last_modified      String
+
+  @@unique([variant_id, warehouse_id])
+}
+
+model inventory_update_records {
+  id                      String  @id
+  idempotency_key         String  @unique
+  client_id               String?
+  client_name             String?
+  product_id              String?
+  variant_id              String?
+  requested_quantity      Float?  @db.Real
+  quantity_from_warehouse Float?  @db.Real
+  supplier_quantity       Float?  @db.Real
+  warehouse_allocations   String? @default("[]")
+  receiving_warehouse_id  String?
+  purchase_invoice_id     String?
+  movement_ids            String? @default("[]")
+  status                  String? @default("completed")
+  created_at              String
+}
+
+model product_variants {
+  id                String  @id
+  product_id        String
+  variant_code      String
+  barcode           String  @unique
+  color             String?
+  size              String?
+  type              String?
+  image_url         String?
+  reorder_threshold Float?  @db.Real
+  unit_cost         Float?  @db.Real
+  status            String? @default("active")
+  created_at        String
+}
+
+model products {
+  id                String  @id
+  name              String
+  sku               String  @unique
+  brand_id          String?
+  category_id       String?
+  supplier_id       String?
+  description       String?
+  image_url         String?
+  country_of_origin String?
+  status            String? @default("active")
+  created_at        String
+}
+
+model purchase_invoices {
+  id                      String  @id
+  invoice_number          String?
+  supplier_id             String?
+  supplier_name           String?
+  product_id              String?
+  product_variant_id      String?
+  client_id               String?
+  requested_quantity      Float?  @default(0) @db.Real
+  quantity_purchased      Float?  @default(0) @db.Real
+  quantity_from_warehouse Float?  @default(0) @db.Real
+  warehouse_allocations   String? @default("[]")
+  receiving_warehouse_id  String?
+  batch_id                String?
+  unit_cost               Float?  @default(0) @db.Real
+  vat_rate                Float?  @default(0) @db.Real
+  subtotal                Float?  @default(0) @db.Real
+  vat_amount              Float?  @default(0) @db.Real
+  total_cost              Float?  @default(0) @db.Real
+  total_amount            Float?  @default(0) @db.Real
+  paid_amount             Float?  @default(0) @db.Real
+  items                   String? @default("[]")
+  status                  String? @default("received")
+  invoice_type            String? @default("purchase")
+  created_at              String
+}
+
+model reservations {
+  id               String  @id
+  variant_id       String
+  warehouse_id     String
+  quantity         Float   @db.Real
+  order_reference  String?
+  expiry_timestamp String
+  status           String? @default("active")
+  created_at       String
+}
+
+model return_invoices {
+  id                  String  @id
+  invoice_number      String?
+  client_id           String?
+  client_name         String?
+  variant_id          String?
+  product_id          String?
+  warehouse_id        String?
+  quantity            Float?  @default(0) @db.Real
+  unit_amount         Float?  @default(0) @db.Real
+  total_amount        Float?  @default(0) @db.Real
+  return_scope        String?
+  notes               String?
+  original_invoice_id String?
+  movement_id         String?
+  created_at          String
+}
+
+model revenue_invoices {
+  id                    String  @id
+  invoice_number        String?
+  customer_name         String?
+  client_id             String?
+  items                 String  @default("[]")
+  total_amount          Float?  @default(0) @db.Real
+  subtotal              Float?  @default(0) @db.Real
+  vat_rate              Float?  @default(0) @db.Real
+  vat_amount            Float?  @default(0) @db.Real
+  delivery_fee          Float?  @default(0) @db.Real
+  delivery_status       String?
+  delivery_address      String?
+  cost_per_unit_at_sale Float?  @default(0) @db.Real
+  cogs_amount           Float?  @default(0) @db.Real
+  gross_profit          Float?  @default(0) @db.Real
+  status                String? @default("pending")
+  paid_amount           Float?  @default(0) @db.Real
+  paid_at               String?
+  warehouse_id          String?
+  movement_id           String?
+  created_at            String
+}
+
+model stock_movements {
+  id                  String  @id
+  variant_id          String
+  warehouse_id        String
+  movement_type       String
+  quantity            Float   @db.Real
+  idempotency_key     String  @unique
+  batch_id            String?
+  source_reference    String?
+  user_id             String?
+  customer_name       String?
+  client_id           String?
+  related_movement_id String?
+  transaction_id      String?
+  notes               String?
+  status              String? @default("completed")
+  timestamp           String
+}
+
+model supplier_product_relations {
+  id                  String  @id
+  supplier_id         String?
+  product_id          String?
+  variant_id          String?
+  client_id           String?
+  purchase_invoice_id String?
+  quantity            Float?  @default(0) @db.Real
+  unit_cost           Float?  @default(0) @db.Real
+  vat_rate            Float?  @default(0) @db.Real
+  total_cost          Float?  @default(0) @db.Real
+  warehouse_id        String?
+  created_at          String
+}
+
+model suppliers {
+  id            String  @id
+  supplier_code String? @unique
+  name          String
+  email         String?
+  phone         String?
+  country       String?
+  contact_info  String?
+  status        String? @default("active")
+  created_at    String
+}
+
+model transfer_invoices {
+  id                String  @id
+  invoice_number    String?
+  variant_id        String?
+  quantity          Float?  @default(0) @db.Real
+  from_warehouse_id String?
+  to_warehouse_id   String?
+  movement_out_id   String?
+  movement_in_id    String?
+  created_at        String
+}
+
+model transfers {
+  id                    String  @id
+  transfer_number       String?
+  transfer_type         String
+  client_id             String?
+  customer_name         String?
+  supplier_id           String?
+  warehouse_id          String?
+  from_warehouse_id     String?
+  to_warehouse_id       String?
+  product_id            String?
+  product_variant_id    String?
+  quantity              Float?  @db.Real
+  subtotal              Float?  @default(0) @db.Real
+  vat_rate              Float?  @default(0) @db.Real
+  vat_amount            Float?  @default(0) @db.Real
+  total_amount          Float?  @default(0) @db.Real
+  cost_per_unit_at_sale Float?  @default(0) @db.Real
+  cogs_amount           Float?  @default(0) @db.Real
+  gross_profit          Float?  @default(0) @db.Real
+  status                String? @default("completed")
+  movement_id           String?
+  movement_ids          String?
+  revenue_invoice_id    String?
+  purchase_invoice_id   String?
+  transfer_invoice_id   String?
+  movement_out_id       String?
+  movement_in_id        String?
+  created_at            String
+}
+
+model users {
+  id            String  @id
+  email         String  @unique
+  password_hash String
+  displayname   String?
+  role          String  @default("worker")
+  phone         String?
+  location      String?
+  photourl      String?
+  warehouse_ids String? @default("[]")
+  status        String? @default("active")
+  created_at    String
+  last_login    String?
+}
+
+model warehouse_expenses {
+  id              String  @id
+  title           String
+  warehouse_id    String
+  category        String?
+  amount          Float   @db.Real
+  currency        String? @default("USD")
+  recurrence      String
+  start_month     String?
+  end_month       String?
+  expense_date    String?
+  payment_date    String?
+  payment_method  String?
+  receipt_number  String?
+  notes           String?
+  status          String? @default("pending")
+  created_by      String?
+  created_by_name String?
+  created_at      String
+}
+
+model warehouses {
+  id                   String  @id
+  name                 String
+  location             String?
+  country              String?
+  manager_id           String?
+  manual_manager_name  String?
+  manual_manager_phone String?
+  manual_manager_email String?
+  status               String? @default("active")
+  created_at           String
+}
